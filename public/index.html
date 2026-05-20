@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五子棋 - 在线对战</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-container">
+    <h1>五子棋</h1>
+    <p class="subtitle">在线对战 · 输入新账号自动注册</p>
+    <input type="text" id="loginUsername" placeholder="账号" autocomplete="off">
+    <input type="password" id="loginPassword" placeholder="密码">
+    <button class="login-btn" id="loginBtn">登录 / 注册</button>
+    <div class="error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="lobbyScreen" style="display:none">
+  <div class="lobby-header">
+    <div class="user-info">
+      <span class="user-avatar">👤</span>
+      <span class="user-name" id="lobbyUsername">-</span>
+      <span class="user-stat" id="lobbyScore">0分</span>
+      <span class="user-stat sep">|</span>
+      <span class="user-stat">胜 <span id="lobbyWins">0</span></span>
+      <span class="user-stat">负 <span id="lobbyLosses">0</span></span>
+      <span class="user-stat">平 <span id="lobbyDraws">0</span></span>
+    </div>
+    <button class="logout-btn" id="lobbyLogoutBtn">退出</button>
+  </div>
+
+  <div class="lobby-body">
+    <div class="lobby-left">
+      <button class="match-btn" id="matchBtn">🎮 匹配对战</button>
+      <div class="match-info" id="matchInfo"></div>
+
+      <div class="lobby-section match-rule">
+        <h3>📖 规则</h3>
+        <p>双方轮流落子，先连成五子者获胜。匹配系统自动为你寻找分数最接近的对手。</p>
+      </div>
+    </div>
+
+    <div class="lobby-right">
+      <div class="lobby-section">
+        <h3>🔍 搜索玩家</h3>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="输入玩家名..." autocomplete="off">
+          <button id="searchBtn">搜索</button>
+        </div>
+        <div id="searchResults"></div>
+      </div>
+
+      <div class="lobby-section">
+        <h3>📨 挑战邀请</h3>
+        <div id="challengesList"><p class="empty-hint">暂无挑战</p></div>
+      </div>
+
+      <div class="lobby-section">
+        <h3>👥 好友列表</h3>
+        <div id="friendsList"><p class="empty-hint">暂无好友</p></div>
+      </div>
+
+      <div class="lobby-section">
+        <h3>🏆 排行榜 TOP 10</h3>
+        <ol id="lobbyLeaderboard"></ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameScreen" style="display:none">
+  <div class="game-header">
+    <div class="game-player-info">
+      <div class="mini-stone black-stone"></div>
+      <div class="gpi-text">
+        <div class="gpi-name" id="gameMyName">我</div>
+        <div class="gpi-score" id="gameMyScore">0分</div>
+      </div>
+    </div>
+    <div class="game-vs">VS</div>
+    <div class="game-player-info right">
+      <div class="gpi-text right">
+        <div class="gpi-name" id="gameOpponentName">对手</div>
+        <div class="gpi-score" id="gameOpponentScore">0分</div>
+      </div>
+      <div class="mini-stone white-stone"></div>
+    </div>
+  </div>
+
+  <div class="game-turn" id="gameTurnIndicator">-</div>
+
+  <canvas id="board"></canvas>
+
+  <div class="game-controls">
+    <button class="resign-btn" id="resignBtn">认输</button>
+  </div>
+
+  <div class="game-result-overlay" id="gameResultOverlay" style="display:none">
+    <div class="result-box">
+      <div class="result-title" id="resultTitle">-</div>
+      <button class="back-btn" id="backToLobbyBtn">返回大厅</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
