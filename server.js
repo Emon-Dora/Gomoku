@@ -21,7 +21,7 @@ const gameEmojis = {};
 let matchIdCounter = 1, challengeIdCounter = 1;
 const BOARD_SIZE = 15;
 
-setInterval(() => { const n = Date.now(); for (const [id, t] of onlineUsers) if (n - t > 50000) onlineUsers.delete(id); }, 30000);
+setInterval(() => { const n = Date.now(); for (const [id, t] of onlineUsers) if (n - t > 12000) onlineUsers.delete(id); }, 8000);
 setInterval(() => { const c = Date.now() - 30000; for (const m in gameEmojis) { gameEmojis[m] = gameEmojis[m].filter(e => e.timestamp > c); if (!gameEmojis[m].length) delete gameEmojis[m]; } }, 15000);
 
 function checkWin(board, row, col, player) {
@@ -98,7 +98,7 @@ app.post('/api/ping', (req, res) => {
 
 app.get('/api/users/online', (req, res) => {
   const n = Date.now();
-  res.json([...onlineUsers.entries()].filter(([_,t]) => n-t<40000).map(([id]) => id));
+  res.json([...onlineUsers.entries()].filter(([_,t]) => n-t<8000).map(([id]) => id));
 });
 
 app.get('/api/users/search', (req, res) => {
@@ -106,7 +106,7 @@ app.get('/api/users/search', (req, res) => {
   if (!q) return res.json([]);
   const db = readDB();
   const n = Date.now();
-  res.json(db.users.filter(u => u.username.toLowerCase().includes(q)).slice(0,10).map(u => ({ id:u.id, username:u.username, nickname:u.nickname, score:u.score, online: onlineUsers.has(u.id)&&n-onlineUsers.get(u.id)<40000 })));
+  res.json(db.users.filter(u => u.username.toLowerCase().includes(q)).slice(0,10).map(u => ({ id:u.id, username:u.username, nickname:u.nickname, score:u.score, online: onlineUsers.has(u.id)&&n-onlineUsers.get(u.id)<8000 })));
 });
 
 // FRIENDS
@@ -116,7 +116,7 @@ app.get('/api/friends', (req, res) => {
   const u = db.users.find(x => x.id === uid);
   if (!u) return res.status(404).json({ error: 'ç¨æ·ä¸å­å¨' });
   const n = Date.now();
-  res.json(db.users.filter(x => (u.friends||[]).includes(x.id)).map(x => ({ id:x.id, username:x.username, nickname:x.nickname, score:x.score, online: onlineUsers.has(x.id)&&n-onlineUsers.get(x.id)<40000 })));
+  res.json(db.users.filter(x => (u.friends||[]).includes(x.id)).map(x => ({ id:x.id, username:x.username, nickname:x.nickname, score:x.score, online: onlineUsers.has(x.id)&&n-onlineUsers.get(x.id)<8000 })));
 });
 
 app.post('/api/friends/add', (req, res) => {
