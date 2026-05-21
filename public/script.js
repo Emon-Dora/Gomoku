@@ -29,6 +29,14 @@ const canvas = $('board');
 const ctx = canvas.getContext('2d');
 canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
+
+const patternImages = {};
+['butterfly','cat','dog','flower','leaf','star'].forEach(name => {
+  const img = new Image();
+  img.src = 'images/'+name+'.jpg';
+  patternImages[name] = img;
+});
+
 initBoardLocal();
 
 let lastEmojiTimestamp = 0;
@@ -478,62 +486,16 @@ function drawPatternPiece(cx,x,y,r,pattern,isBlack) {
     return;
   }
 
-  const pal = {
-    star:{d:'#b8860b',l:'#ffd700'}, butterfly:{d:'#7d3c98',l:'#bb8fce'},
-    flower:{d:'#c0392b',l:'#f1948a'}, leaf:{d:'#1e8449',l:'#82e0aa'},
-    cat:{d:'#d35400',l:'#f0b27a'}, dog:{d:'#2c3e50',l:'#5dade2'}
-  };
-  const fc=(pal[pattern]||{d:'#444',l:'#bbb'})[isBlack?'d':'l'];
-  cx.save(); cx.fillStyle=fc;
-
-  if (pattern==='star') {
-    const s=r*0.95;
-    cx.beginPath();
-    for(let i=0;i<5;i++){const a=i*4*Math.PI/5-Math.PI/2,px=x+s*Math.cos(a),py=y+s*Math.sin(a);i===0?cx.moveTo(px,py):cx.lineTo(px,py)}
-    cx.closePath(); cx.fill();
-  } else if (pattern==='butterfly') {
-    cx.beginPath(); cx.ellipse(x-r*0.5,y-r*0.05,r*0.8,r*0.9,-0.35,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.ellipse(x+r*0.5,y-r*0.05,r*0.8,r*0.9,0.35,0,Math.PI*2); cx.fill();
-    cx.strokeStyle=isBlack?'#5b2c6f':'#7d3c98'; cx.lineWidth=1.2;
-    cx.beginPath(); cx.moveTo(x,y-r*0.6); cx.lineTo(x,y+r*0.55); cx.stroke();
-    cx.beginPath(); cx.moveTo(x-r*0.25,y-r*0.35); cx.lineTo(x-r*0.45,y-r*0.75);
-    cx.moveTo(x+r*0.25,y-r*0.35); cx.lineTo(x+r*0.45,y-r*0.75); cx.stroke();
-  } else if (pattern==='flower') {
-    for(let i=0;i<5;i++){const a=i*2*Math.PI/5-Math.PI/2;cx.beginPath();cx.arc(x+r*0.55*Math.cos(a),y+r*0.55*Math.sin(a),r*0.32,0,Math.PI*2);cx.fill()}
-    cx.fillStyle=isBlack?'#f9e79f':'#fef9e7'; cx.beginPath(); cx.arc(x,y,r*0.2,0,Math.PI*2); cx.fill();
-  } else if (pattern==='leaf') {
-    cx.beginPath(); cx.ellipse(x+r*0.05,y,r*0.95,r*0.65,-0.2,0,Math.PI*2); cx.fill();
-    cx.strokeStyle=isBlack?'#145a32':'#1e8449'; cx.lineWidth=1.2;
-    cx.beginPath(); cx.moveTo(x-r*0.8,y); cx.lineTo(x+r*0.95,y); cx.stroke();
-    cx.beginPath(); cx.moveTo(x-r*0.15,y-r*0.35); cx.lineTo(x+r*0.25,y);
-    cx.moveTo(x-r*0.15,y+r*0.35); cx.lineTo(x+r*0.25,y); cx.stroke();
-  } else if (pattern==='cat') {
-    const en=isBlack?'#333':'#555';
-    cx.beginPath();
-    cx.moveTo(x-r*0.85,y+r*0.2); cx.lineTo(x-r*0.75,y-r*0.65);
-    cx.lineTo(x-r*0.15,y); cx.lineTo(x+r*0.15,y);
-    cx.lineTo(x+r*0.75,y-r*0.65); cx.lineTo(x+r*0.85,y+r*0.2);
-    cx.closePath(); cx.fill();
-    cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x-r*0.25,y+r*0.05,5,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.arc(x+r*0.25,y+r*0.05,5,0,Math.PI*2); cx.fill();
-    cx.fillStyle=en; cx.beginPath(); cx.arc(x-r*0.25,y+r*0.05,2.5,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.arc(x+r*0.25,y+r*0.05,2.5,0,Math.PI*2); cx.fill();
-    cx.fillStyle='#f9e79f'; cx.beginPath(); cx.arc(x,y-r*0.12,3.5,0,Math.PI*2); cx.fill();
-    cx.strokeStyle=isBlack?'#a04000':'#d35400'; cx.lineWidth=1;
-    for(let s=-1;s<=1;s+=2){cx.beginPath();cx.moveTo(x+s*0.18,y+r*0.12);cx.quadraticCurveTo(x+s*0.4,y+r*0.4,x+s*0.25,y+r*0.05);cx.stroke()}
-  } else if (pattern==='dog') {
-    cx.beginPath(); cx.arc(x,y+r*0.05,r*0.8,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.ellipse(x-r*0.6,y-r*0.3,r*0.4,r*0.65,-0.3,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.ellipse(x+r*0.6,y-r*0.3,r*0.4,r*0.65,0.3,0,Math.PI*2); cx.fill();
-    cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x-r*0.25,y-r*0.05,5,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.arc(x+r*0.25,y-r*0.05,5,0,Math.PI*2); cx.fill();
-    cx.fillStyle=isBlack?'#333':'#555'; cx.beginPath(); cx.arc(x-r*0.25,y-r*0.05,2.5,0,Math.PI*2); cx.fill();
-    cx.beginPath(); cx.arc(x+r*0.25,y-r*0.05,2.5,0,Math.PI*2); cx.fill();
-    cx.fillStyle=isBlack?'#333':'#555'; cx.beginPath(); cx.arc(x,y+r*0.25,5,0,Math.PI*2); cx.fill();
-    cx.strokeStyle=isBlack?'#a04000':'#d35400'; cx.lineWidth=1;
-    cx.beginPath(); cx.arc(x,y+r*0.12,6,0.2,Math.PI-0.2); cx.stroke();
+  const img = patternImages[pattern];
+  if (img && img.complete && img.naturalWidth) {
+    cx.save();
+    cx.beginPath(); cx.arc(x,y,r,0,Math.PI*2); cx.clip();
+    const s = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - s) / 2;
+    const sy = (img.naturalHeight - s) / 2;
+    cx.drawImage(img, sx, sy, s, s, x-r, y-r, r*2, r*2);
+    cx.restore();
   }
-  cx.restore();
 }
 
 // ============ LEADERBOARD LOBBY ============
