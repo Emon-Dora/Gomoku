@@ -152,7 +152,7 @@ app.post('/api/match/join', (req, res) => {
     const opp = matchQueue.splice(bi,1)[0];
     const ca=Math.random()<0.5?'black':'white', cb=ca==='black'?'white':'black';
     const mid=matchIdCounter++;
-    const game = createGame(mid, { id:userId, username:u.username, score:u.score, pattern:pattern||'default' }, { id:opp.userId, username:opp.username, score:opp.score, pattern:opp.pattern||'default', wins:opp.wins, losses:opp.losses, draws:opp.draws }, ca, cb);
+    const game = createGame(mid, { id:userId, username:u.username, score:u.score, pattern:pattern||'default', wins:u.wins||0, losses:u.losses||0, draws:u.draws||0 }, { id:opp.userId, username:opp.username, score:opp.score, pattern:opp.pattern||'default', wins:opp.wins, losses:opp.losses, draws:opp.draws }, ca, cb);
     activeGames[mid]=game;
     const md1={ matchId:mid, opponent:{id:opp.userId,username:opp.username,score:opp.score,wins:opp.wins,losses:opp.losses,draws:opp.draws}, color:ca, myOppPattern:opp.pattern||'default' };
     activeMatches[userId]=md1;
