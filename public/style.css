@@ -164,6 +164,7 @@ input, button { font-family: inherit; }
 .btn-remove { background: #f5f5f5; color: #999; }
 .btn-remove:hover { background: #fee; color: #e74c3c; }
 
+.already-friend { font-size: 11px; color: #999; white-space: nowrap; }
 .empty-hint { font-size: 13px; color: #bbb; text-align: center; padding: 8px 0; }
 
 #lobbyLeaderboard { list-style: none; counter-reset: lb; }
