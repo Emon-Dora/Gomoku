@@ -53,8 +53,9 @@ function endGameAndUpdateScores(game) {
   if (!p1 || !p2) return;
   if (game.winner) {
     const w = db.users.find(u => u.id === game.winner), l = db.users.find(u => u.id === (ps[0].id === game.winner ? ps[1].id : ps[0].id));
-    if (w) { w.score += 1; w.wins += 1; } if (l) { l.losses += 1; }
-  } else { p1.draws += 1; p2.draws += 1; }
+    if (w) { w.score += 1; w.wins += 1; w.recentGames=[...(w.recentGames||[]).slice(-9),'win']; }
+    if (l) { l.losses += 1; l.recentGames=[...(l.recentGames||[]).slice(-9),'loss']; }
+  } else { p1.draws += 1; p2.draws += 1; p1.recentGames=[...(p1.recentGames||[]).slice(-9),'draw']; p2.recentGames=[...(p2.recentGames||[]).slice(-9),'draw']; }
   writeDB(db);
   if (game.mid && gameEmojis[game.mid]) delete gameEmojis[game.mid];
   Object.values(game.players).forEach(p => delete activeMatches[p.id]);
@@ -79,7 +80,7 @@ app.post('/api/login', (req, res) => {
       return res.json({ ...s, friends: s.friends||[] });
     }
     const hp = bcrypt.hashSync(password, 10);
-    const nu = { id:db.nextId++, username, password:hp, nickname:username, score:0, wins:0, losses:0, draws:0, friends:[], created_at:new Date().toISOString() };
+    const nu = { id:db.nextId++, username, password:hp, nickname:username, score:0, wins:0, losses:0, draws:0, recentGames:[], friends:[], created_at:new Date().toISOString() };
     db.users.push(nu); writeDB(db);
     onlineUsers.set(nu.id, Date.now());
     const { password:_, ...s } = nu;
@@ -137,7 +138,7 @@ app.delete('/api/friends/:userId/:friendId', (req, res) => {
 });
 
 // MATCHMAKING
-function winRate(u) { const t=(u.wins||0)+(u.losses||0)+(u.draws||0); return t?(u.wins||0)/t:0; }
+function recentWR(u) { const g=(u.recentGames||[]).filter(x=>x); return g.length ? g.filter(r=>r==='win').length/g.length : 0; }
 app.post('/api/match/join', (req, res) => {
   const { userId, pattern } = req.body;
   if (!userId) return res.status(400).json({ error: 'ç¼ºå° userId' });
@@ -146,20 +147,20 @@ app.post('/api/match/join', (req, res) => {
   const db = readDB(); const u = db.users.find(x=>x.id===userId);
   if (!u) return res.status(404).json({ error: 'ç¨æ·ä¸å­å¨' });
   if (matchQueue.length > 0) {
-    const myWr=winRate(u);
-    let bi=0, bd=Math.abs(winRate(matchQueue[0])-myWr);
-    for (let i=1;i<matchQueue.length;i++) { const d=Math.abs(winRate(matchQueue[i])-myWr); if (d<bd) { bd=d; bi=i; } }
+    const myWr=recentWR(u);
+    let bi=0, bd=Math.abs(recentWR(matchQueue[0])-myWr);
+    for (let i=1;i<matchQueue.length;i++) { const d=Math.abs(recentWR(matchQueue[i])-myWr); if (d<bd) { bd=d; bi=i; } }
     const opp = matchQueue.splice(bi,1)[0];
     const ca=Math.random()<0.5?'black':'white', cb=ca==='black'?'white':'black';
     const mid=matchIdCounter++;
-    const game = createGame(mid, { id:userId, username:u.username, score:u.score, pattern:pattern||'default', wins:u.wins||0, losses:u.losses||0, draws:u.draws||0 }, { id:opp.userId, username:opp.username, score:opp.score, pattern:opp.pattern||'default', wins:opp.wins, losses:opp.losses, draws:opp.draws }, ca, cb);
+    const game = createGame(mid, { id:userId, username:u.username, score:u.score, pattern:pattern||'default', wins:u.wins||0, losses:u.losses||0, draws:u.draws||0, recentGames:u.recentGames||[] }, { id:opp.userId, username:opp.username, score:opp.score, pattern:opp.pattern||'default', wins:opp.wins, losses:opp.losses, draws:opp.draws, recentGames:opp.recentGames||[] }, ca, cb);
     activeGames[mid]=game;
-    const md1={ matchId:mid, opponent:{id:opp.userId,username:opp.username,score:opp.score,wins:opp.wins,losses:opp.losses,draws:opp.draws}, color:ca, myOppPattern:opp.pattern||'default' };
+    const md1={ matchId:mid, opponent:{id:opp.userId,username:opp.username,score:opp.score,wins:opp.wins,losses:opp.losses,draws:opp.draws,recentGames:opp.recentGames||[]}, color:ca, myOppPattern:opp.pattern||'default' };
     activeMatches[userId]=md1;
-    activeMatches[opp.userId]={ matchId:mid, opponent:{id:userId,username:u.username,score:u.score,wins:u.wins,losses:u.losses,draws:u.draws}, color:cb, myOppPattern:pattern||'default' };
+    activeMatches[opp.userId]={ matchId:mid, opponent:{id:userId,username:u.username,score:u.score,wins:u.wins,losses:u.losses,draws:u.draws,recentGames:u.recentGames||[]}, color:cb, myOppPattern:pattern||'default' };
     return res.json({ status:'matched', ...md1 });
   }
-  matchQueue.push({ userId, username:u.username, score:u.score, pattern:pattern||'default', wins:u.wins||0, losses:u.losses||0, draws:u.draws||0 });
+  matchQueue.push({ userId, username:u.username, score:u.score, pattern:pattern||'default', wins:u.wins||0, losses:u.losses||0, draws:u.draws||0, recentGames:u.recentGames||[] });
   res.json({ status:'waiting' });
 });
 
@@ -206,10 +207,10 @@ app.post('/api/challenge/respond', (req, res) => {
   if (!from||!to) return res.status(404).json({ error:'ç¨æ·ä¸å­å¨' });
   const ca=Math.random()<0.5?'black':'white', cb=ca==='black'?'white':'black';
   const mid=matchIdCounter++;
-  const game=createGame(mid, { id:c.toUserId, username:to.username, score:to.score, pattern:pattern||'default', wins:to.wins, losses:to.losses, draws:to.draws }, { id:c.fromUserId, username:from.username, score:from.score, pattern:c.pattern||'default', wins:from.wins, losses:from.losses, draws:from.draws }, ca, cb);
+  const game=createGame(mid, { id:c.toUserId, username:to.username, score:to.score, pattern:pattern||'default', wins:to.wins, losses:to.losses, draws:to.draws, recentGames:to.recentGames||[] }, { id:c.fromUserId, username:from.username, score:from.score, pattern:c.pattern||'default', wins:from.wins, losses:from.losses, draws:from.draws, recentGames:from.recentGames||[] }, ca, cb);
   activeGames[mid]=game;
-  activeMatches[c.fromUserId]={ matchId:mid, opponent:{id:c.toUserId,username:to.username,score:to.score,wins:to.wins,losses:to.losses,draws:to.draws}, color:cb, myOppPattern:pattern||'default' };
-  activeMatches[c.toUserId]={ matchId:mid, opponent:{id:c.fromUserId,username:from.username,score:from.score,wins:from.wins,losses:from.losses,draws:from.draws}, color:ca, myOppPattern:c.pattern||'default' };
+  activeMatches[c.fromUserId]={ matchId:mid, opponent:{id:c.toUserId,username:to.username,score:to.score,wins:to.wins,losses:to.losses,draws:to.draws,recentGames:to.recentGames||[]}, color:cb, myOppPattern:pattern||'default' };
+  activeMatches[c.toUserId]={ matchId:mid, opponent:{id:c.fromUserId,username:from.username,score:from.score,wins:from.wins,losses:from.losses,draws:from.draws,recentGames:from.recentGames||[]}, color:ca, myOppPattern:c.pattern||'default' };
   res.json({ status:'matched', ...activeMatches[c.toUserId] });
 });
 
@@ -271,8 +272,10 @@ app.get('/api/game/emojis', (req, res) => {
 // LEADERBOARD
 app.get('/api/leaderboard', (req, res) => {
   const db = readDB();
-  const wr = u => { const t = (u.wins||0)+(u.losses||0)+(u.draws||0); return t ? (u.wins||0)/t : 0; };
-  res.json([...db.users].sort((a,b)=>wr(b)-wr(a)).slice(0,10).map(u=>{ const t=(u.wins||0)+(u.losses||0)+(u.draws||0); return { username:u.username, nickname:u.nickname, score:u.score, wins:u.wins, losses:u.losses, draws:u.draws, winRate:t?Math.round((u.wins||0)/t*100):0 }; }));
+  res.json([...db.users].sort((a,b)=>recentWR(b)-recentWR(a)).slice(0,10).map(u=>{
+    const g=(u.recentGames||[]).filter(x=>x); const wr=g.length?Math.round(g.filter(r=>r==='win').length/g.length*100):0;
+    return { username:u.username, nickname:u.nickname, score:u.score, wins:u.wins, losses:u.losses, draws:u.draws, winRate:wr };
+  }));
 });
 
 app.get('/api/user/:id', (req, res) => {
