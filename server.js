@@ -273,4 +273,9 @@ app.get('/api/user/:id', (req, res) => {
   const {password:_, ...s}=u; res.json({...s, friends:s.friends||[]});
 });
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'æå¡å¨åé¨éè¯¯' });
+});
+
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
