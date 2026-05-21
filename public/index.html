@@ -24,11 +24,13 @@
     <div class="user-info">
       <span class="user-avatar">👤</span>
       <span class="user-name" id="lobbyUsername">-</span>
+      <span class="achv-badge" id="lobbyAchievement"></span>
       <span class="user-stat" id="lobbyScore">0分</span>
       <span class="user-stat sep">|</span>
       <span class="user-stat">胜 <span id="lobbyWins">0</span></span>
       <span class="user-stat">负 <span id="lobbyLosses">0</span></span>
       <span class="user-stat">平 <span id="lobbyDraws">0</span></span>
+      <span class="user-stat" id="lobbyWinRate">胜率 0%</span>
     </div>
     <button class="logout-btn" id="lobbyLogoutBtn">退出</button>
   </div>
@@ -48,7 +50,7 @@
 
       <div class="lobby-section match-rule">
         <h3>📖 规则</h3>
-        <p>点击一次预览落子位置，再点击一次确认落子。双方轮流，先连成五子者获胜。匹配系统自动寻找分数最接近的对手。</p >
+        <p>点击一次预览落子位置，再点击一次确认落子。双方轮流，先连成五子者获胜。匹配系统自动寻找胜率最接近的对手。</p >
       </div>
     </div>
 
@@ -86,6 +88,7 @@
       <div class="mini-stone black-stone"></div>
       <div class="gpi-text">
         <div class="gpi-name" id="gameMyName">我</div>
+        <span class="achv-badge" id="gameMyAchievement"></span>
         <div class="gpi-score" id="gameMyScore">0分</div>
       </div>
     </div>
@@ -93,6 +96,7 @@
     <div class="game-player-info right">
       <div class="gpi-text right">
         <div class="gpi-name" id="gameOpponentName">对手</div>
+        <span class="achv-badge" id="gameOpponentAchievement"></span>
         <div class="gpi-score" id="gameOpponentScore">0分</div>
       </div>
       <div class="mini-stone white-stone"></div>
