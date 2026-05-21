@@ -74,6 +74,12 @@ const apiGetEmojis = (mid,since) => api(`/api/game/emojis?matchId=${mid}&since=$
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
+const ACHIEVEMENTS = [
+  [100,'棋迹暖暖·咪咪嘛嘛'],[95,'夏司逆'],[80,'郝利亥'],[60,'甄琮明'],[40,'白下客'],[20,'朱逸枝']
+];
+function calcWinRate(u) { const t=(u.wins||0)+(u.losses||0)+(u.draws||0); return t?Math.round((u.wins||0)/t*100):0; }
+function getAchievement(wr) { for(const[th,n]of ACHIEVEMENTS)if(wr>=th)return n; return ''; }
+
 function showScreen(name) {
   ['loginScreen','lobbyScreen','gameScreen'].forEach(s => $(s).style.display = s===name ? 'flex' : 'none');
 }
@@ -129,11 +135,14 @@ function enterLobby() {
 
 function refreshLobby() {
   if (!state.user) return;
-  $('lobbyUsername').textContent = state.user.username;
-  $('lobbyScore').textContent = state.user.score+'分';
-  $('lobbyWins').textContent = state.user.wins;
-  $('lobbyLosses').textContent = state.user.losses;
-  $('lobbyDraws').textContent = state.user.draws;
+  const u=state.user, wr=calcWinRate(u);
+  $('lobbyUsername').textContent = u.username;
+  $('lobbyAchievement').textContent = getAchievement(wr);
+  $('lobbyScore').textContent = u.score+'分';
+  $('lobbyWinRate').textContent = '胜率 '+wr+'%';
+  $('lobbyWins').textContent = u.wins;
+  $('lobbyLosses').textContent = u.losses;
+  $('lobbyDraws').textContent = u.draws;
   refreshFriends();
   refreshLeaderboardLobby();
 }
@@ -310,8 +319,11 @@ function startGame(matchId, opponent, color, oppPattern) {
   state.waitingForChallenge=null; stopChallengeSentPolling(); clearMatchAreaForChallenge();
   initBoardLocal();
   showScreen('gameScreen');
-  $('gameMyName').textContent=state.user.username; $('gameMyScore').textContent=state.user.score+'分';
+  const myWr=calcWinRate(state.user); const oppWr=calcWinRate(opponent);
+  $('gameMyName').textContent=state.user.username; $('gameMyAchievement').textContent=getAchievement(myWr);
+  $('gameMyScore').textContent=state.user.score+'分';
   $('gameOpponentName').textContent=opponent.username; $('gameOpponentScore').textContent=opponent.score+'分';
+  $('gameOpponentAchievement').textContent=getAchievement(oppWr);
   $('gameResultOverlay').style.display='none';
   lastEmojiTimestamp=Date.now();
   updateGameTurnUI(null); renderBoard(); startGamePolling(); startEmojiPolling();
@@ -342,6 +354,7 @@ async function pollGameState() {
     const gs=await apiGameState(state.matchId,state.user.id);
     state.gameState=gs; state.board=gs.board.map(r=>[...r]);
     state.myPattern=gs.myPattern; state.opponentPattern=gs.opponentPattern;
+    if(gs.opponent) $('gameOpponentAchievement').textContent=getAchievement(calcWinRate(gs.opponent));
     renderBoard(); updateGameTurnUI(gs);
     if(gs.gameOver&&!state.gameOverShown) { state.gameOverShown=true; showGameResult(gs); }
   } catch {
@@ -355,7 +368,7 @@ async function showGameResult(gs) {
   if(gs.winner===state.user.id) $('resultTitle').textContent='🎉 你赢了！';
   else if(gs.winner===null) $('resultTitle').textContent='🤝 平局';
   else $('resultTitle').textContent='😞 你输了';
-  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; $('gameMyScore').textContent=fresh.score+'分'; } catch {}
+  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; const wr=calcWinRate(fresh); $('gameMyScore').textContent=fresh.score+'分'; $('gameMyAchievement').textContent=getAchievement(wr); } catch {}
 }
 
 $('backToLobbyBtn').addEventListener('click',()=>{
@@ -502,7 +515,7 @@ function drawPatternPiece(cx,x,y,r,pattern,isBlack) {
 async function refreshLeaderboardLobby() {
   try {
     const l=await apiLeaderboard();
-    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.score}分</span></li>`).join('')||'<p class="empty-hint">暂无数据</p>';
+    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.winRate}%</span></li>`).join('')||'<p class="empty-hint">暂无数据</p>';
   } catch {}
 }
 
