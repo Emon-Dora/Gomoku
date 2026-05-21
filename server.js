@@ -62,9 +62,26 @@ function endGameAndUpdateScores(game) {
 }
 
 function createGame(mid, p1, p2, c1, c2) {
-  return { mid, board: Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(0)), currentPlayer:1, gameOver:false, winner:null, lastMove:null, winLine:null,
+  return { mid, board: Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(0)), currentPlayer:1, gameOver:false, winner:null, lastMove:null, winLine:null, turnStartedAt:Date.now(),
     players: { [p1.id]:{...p1, color:c1}, [p2.id]:{...p2, color:c2} }, patterns: { [p1.id]: p1.pattern||'default', [p2.id]: p2.pattern||'default' } };
 }
+
+const TURN_TIMEOUT = 30000;
+setInterval(() => {
+  const now = Date.now();
+  for (const mid in activeGames) {
+    const g = activeGames[mid];
+    if (g.gameOver) continue;
+    if (now - g.turnStartedAt <= TURN_TIMEOUT) continue;
+    const loserId = Object.keys(g.players).find(id => {
+      const p = g.players[id];
+      return (p.color==='black'&&g.currentPlayer===1)||(p.color==='white'&&g.currentPlayer===2);
+    });
+    if (!loserId) continue;
+    g.gameOver=true; g.winner=parseInt(Object.keys(g.players).find(id=>parseInt(id)!==parseInt(loserId))); g.winLine=[];
+    endGameAndUpdateScores(g);
+  }
+}, 3000);
 
 // AUTH
 app.post('/api/login', (req, res) => {
@@ -232,7 +249,7 @@ app.post('/api/game/move', (req, res) => {
   g.board[row][col]=pv; g.lastMove={row,col};
   if (checkWin(g.board,row,col,pv)) { g.gameOver=true; g.winner=userId; g.winLine=getWinLine(g.board,row,col,pv); endGameAndUpdateScores(g); return res.json({success:true,gameOver:true,winner:userId}); }
   if (g.board.every(r=>r.every(c=>c!==0))) { g.gameOver=true; g.winner=null; endGameAndUpdateScores(g); return res.json({success:true,gameOver:true,winner:null}); }
-  g.currentPlayer=pv===1?2:1;
+  g.currentPlayer=pv===1?2:1; g.turnStartedAt=Date.now();
   res.json({success:true,gameOver:false});
 });
 
@@ -242,7 +259,7 @@ app.get('/api/game/state', (req, res) => {
   const g=activeGames[mid]; if (!g) return res.status(404).json({ error:'æ¸¸æä¸å­å¨' });
   const p=g.players[uid]; if (!p) return res.status(403).json({ error:'æ æé' });
   const opp=Object.values(g.players).find(x=>x.id!==uid)||null;
-  res.json({ board:g.board, currentPlayer:g.currentPlayer, gameOver:g.gameOver, winner:g.winner, myColor:p.color, myPattern:g.patterns[uid], opponentPattern:opp?g.patterns[opp.id]:'default', opponent:opp, lastMove:g.lastMove, winLine:g.winLine });
+  res.json({ board:g.board, currentPlayer:g.currentPlayer, gameOver:g.gameOver, winner:g.winner, myColor:p.color, myPattern:g.patterns[uid], opponentPattern:opp?g.patterns[opp.id]:'default', opponent:opp, lastMove:g.lastMove, winLine:g.winLine, turnRemaining:Math.max(0,TURN_TIMEOUT-(Date.now()-g.turnStartedAt)) });
 });
 
 app.post('/api/game/resign', (req, res) => {
