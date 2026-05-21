@@ -75,9 +75,9 @@ const apiGetEmojis = (mid,since) => api(`/api/game/emojis?matchId=${mid}&since=$
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 const ACHIEVEMENTS = [
-  [100,'棋迹暖暖·咪咪嘛嘛'],[95,'夏司逆'],[80,'郝利亥'],[60,'甄琮明'],[40,'白下客'],[20,'朱逸枝']
+  [100,'棋迹暖暖·咪咪嘛嘛'],[90,'夏司逆'],[80,'郝利亥'],[60,'甄琮明'],[40,'白下客'],[20,'朱逸枝']
 ];
-function calcWinRate(u) { const t=(u.wins||0)+(u.losses||0)+(u.draws||0); return t?Math.round((u.wins||0)/t*100):0; }
+function calcWinRate(u) { const g=(u.recentGames||[]).filter(x=>x); return g.length?Math.round(g.filter(r=>r==='win').length/g.length*100):0; }
 function getAchievement(wr) { for(const[th,n]of ACHIEVEMENTS)if(wr>=th)return n; return ''; }
 
 function showScreen(name) {
