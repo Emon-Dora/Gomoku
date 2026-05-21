@@ -67,22 +67,27 @@ function createGame(mid, p1, p2, c1, c2) {
 
 // AUTH
 app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'è¯·è¾å¥è´¦å·åå¯ç ' });
-  const db = readDB();
-  let u = db.users.find(x => x.username === username);
-  if (u) {
-    if (!bcrypt.compareSync(password, u.password)) return res.status(401).json({ error: 'å¯ç éè¯¯' });
-    const { password:_, ...s } = u;
-    onlineUsers.set(u.id, Date.now());
-    return res.json({ ...s, friends: s.friends||[] });
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'è¯·è¾å¥è´¦å·åå¯ç ' });
+    const db = readDB();
+    let u = db.users.find(x => x.username === username);
+    if (u) {
+      if (!u.password || !bcrypt.compareSync(password, u.password)) return res.status(401).json({ error: 'å¯ç éè¯¯' });
+      const { password:_, ...s } = u;
+      onlineUsers.set(u.id, Date.now());
+      return res.json({ ...s, friends: s.friends||[] });
+    }
+    const hp = bcrypt.hashSync(password, 10);
+    const nu = { id:db.nextId++, username, password:hp, nickname:username, score:0, wins:0, losses:0, draws:0, friends:[], created_at:new Date().toISOString() };
+    db.users.push(nu); writeDB(db);
+    onlineUsers.set(nu.id, Date.now());
+    const { password:_, ...s } = nu;
+    res.json({ ...s, friends: [] });
+  } catch(e) {
+    console.error('Login error:', e);
+    res.status(500).json({ error: 'ç»å½å¤±è´¥' });
   }
-  const hp = bcrypt.hashSync(password, 10);
-  const nu = { id:db.nextId++, username, password:hp, nickname:username, score:0, wins:0, losses:0, draws:0, friends:[], created_at:new Date().toISOString() };
-  db.users.push(nu); writeDB(db);
-  onlineUsers.set(nu.id, Date.now());
-  const { password:_, ...s } = nu;
-  res.json({ ...s, friends: [] });
 });
 
 app.post('/api/ping', (req, res) => {
