@@ -342,7 +342,8 @@ function updateGameTurnUI(gs) {
     return;
   }
   const myTurn=(state.myColor==='black'&&gs.currentPlayer===1)||(state.myColor==='white'&&gs.currentPlayer===2);
-  el.textContent=myTurn?'👆 轮到你了 (点击一次预览，再点确认)':'⏳ 等待对手落子...';
+  const sec=Math.ceil((gs.turnRemaining||30000)/1000);
+  el.textContent=myTurn?`👆 轮到你了 (${sec}秒)`:'⏳ 等待对手落子...';
 }
 
 function startGamePolling() { stopGamePolling(); gamePollTimer=setInterval(pollGameState,1000); pollGameState(); }
