@@ -66,6 +66,11 @@ input, button { font-family: inherit; }
 .user-info { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .user-avatar { font-size: 22px; }
 .user-name { font-weight: 700; font-size: 16px; color: #222; }
+.achv-badge {
+  font-size: 11px; color: #e67e22; background: #fef5e7;
+  padding: 2px 8px; border-radius: 10px; white-space: nowrap;
+  font-weight: 600; letter-spacing: 0.5px;
+}
 .user-stat { color: #888; }
 .user-stat.sep { color: #ddd; }
 
