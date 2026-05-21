@@ -11,7 +11,7 @@
 <div id="loginScreen">
   <div class="login-container">
     <h1>五子棋</h1>
-    <p class="subtitle">在线对战 · 输入新账号自动注册</p>
+    <p class="subtitle">在线对战 · 输入新账号自动注册</p >
     <input type="text" id="loginUsername" placeholder="账号" autocomplete="off">
     <input type="password" id="loginPassword" placeholder="密码">
     <button class="login-btn" id="loginBtn">登录 / 注册</button>
@@ -38,9 +38,17 @@
       <button class="match-btn" id="matchBtn">🎮 匹配对战</button>
       <div class="match-info" id="matchInfo"></div>
 
+      <div class="lobby-section">
+        <h3>🎨 选择棋子样式</h3>
+        <div class="pattern-grid" id="patternGrid"></div>
+        <div class="pattern-preview">
+          <canvas id="patternPreviewCanvas" width="80" height="40"></canvas>
+        </div>
+      </div>
+
       <div class="lobby-section match-rule">
         <h3>📖 规则</h3>
-        <p>双方轮流落子，先连成五子者获胜。匹配系统自动为你寻找分数最接近的对手。</p>
+        <p>点击一次预览落子位置，再点击一次确认落子。双方轮流，先连成五子者获胜。匹配系统自动寻找分数最接近的对手。</p >
       </div>
     </div>
 
@@ -56,12 +64,12 @@
 
       <div class="lobby-section">
         <h3>📨 挑战邀请</h3>
-        <div id="challengesList"><p class="empty-hint">暂无挑战</p></div>
+        <div id="challengesList"><p class="empty-hint">暂无挑战</p ></div>
       </div>
 
       <div class="lobby-section">
         <h3>👥 好友列表</h3>
-        <div id="friendsList"><p class="empty-hint">暂无好友</p></div>
+        <div id="friendsList"><p class="empty-hint">暂无好友</p ></div>
       </div>
 
       <div class="lobby-section">
@@ -98,6 +106,19 @@
   <div class="game-controls">
     <button class="resign-btn" id="resignBtn">认输</button>
   </div>
+
+  <div class="emoji-bar" id="emojiBar">
+    <button class="emoji-btn" data-emoji="😊">😊</button>
+    <button class="emoji-btn" data-emoji="👍">👍</button>
+    <button class="emoji-btn" data-emoji="😂">😂</button>
+    <button class="emoji-btn" data-emoji="😮">😮</button>
+    <button class="emoji-btn" data-emoji="😢">😢</button>
+    <button class="emoji-btn" data-emoji="😡">😡</button>
+    <button class="emoji-btn" data-emoji="🎉">🎉</button>
+    <button class="emoji-btn" data-emoji="💪">💪</button>
+  </div>
+
+  <div id="emojiNotification"></div>
 
   <div class="game-result-overlay" id="gameResultOverlay" style="display:none">
     <div class="result-box">
