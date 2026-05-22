@@ -6,13 +6,31 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// 强制所有响应 UTF-8（解决 Render 乱码核心）
+app.use((req, res, next) => {
+  res.charset = 'utf-8';
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  next();
+});
+
+// 静态文件也强制 UTF-8
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.charset = 'utf-8';
+  }
+}));
+
+// 增强 send 兜底
 app.use((req, res, next) => {
   const _send = res.send.bind(res);
   res.send = function(body) {
     const ct = res.getHeader('Content-Type');
-    if (ct && typeof ct === 'string' && !ct.includes('charset') && (ct.includes('text/') || ct.includes('application/json') || ct.includes('application/javascript')))
+    if (ct && typeof ct === 'string' && !ct.includes('charset') && 
+       (ct.includes('text/') || ct.includes('application/json') || ct.includes('application/javascript'))) {
       res.setHeader('Content-Type', ct + '; charset=utf-8');
+    }
     return _send(body);
   };
   next();
