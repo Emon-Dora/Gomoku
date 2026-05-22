@@ -8,20 +8,126 @@ const state = {
   isPlaying: false, isMatching: false, gameOverShown: false,
   waitingForChallenge: null, waitingTargetName: '',
   gameState: null, board: null,
-  selectedPattern: 'default', previewCell: null
+  selectedPattern: 'default', previewCell: null,
+  isAIGame: false, aiWaiting: false,
+  lastMove: null, winLine: null, flashOn: false, flashTimer: null, delayedHandled: false
 };
 
+function getWinLineLocal(board, player) {
+  for (let r=0;r<BOARD_SIZE;r++) for (let c=0;c<BOARD_SIZE;c++) {
+    if (board[r][c]!==player) continue;
+    for (const [dr,dc] of [[1,0],[0,1],[1,1],[1,-1]]) {
+      const cells=[{row:r,col:c}];
+      for (let i=1;i<5;i++) { const nr=r+dr*i,nc=c+dc*i; if (nr<0||nr>=BOARD_SIZE||nc<0||nc>=BOARD_SIZE||board[nr][nc]!==player) break; cells.push({row:nr,col:nc}); }
+      if (cells.length>=5) return cells;
+    }
+  }
+  return [];
+}
+
+function delayedGameOver(winner, winLine) {
+  if (state.delayedHandled) return;
+  state.delayedHandled = true;
+  state.gameState.gameOver = true;
+  state.gameState.winner = winner;
+  state.gameState.winLine = winLine || [];
+  state.winLine = winLine || [];
+  if (!state.winLine.length) { state.gameOverShown=true; showGameResult(state.gameState); return; }
+  state.flashOn = true;
+  state.gameOverShown = false;
+  if (state.flashTimer) clearInterval(state.flashTimer);
+  state.flashTimer = setInterval(() => { state.flashOn = !state.flashOn; renderBoard(); }, 500);
+  setTimeout(() => {
+    if (state.flashTimer) { clearInterval(state.flashTimer); state.flashTimer = null; }
+    state.gameOverShown = true;
+    showGameResult(state.gameState);
+  }, 5000);
+  renderBoard();
+}
+
+function hasNeighbor(board, row, col, dist) {
+  for (let dr = -dist; dr <= dist; dr++) for (let dc = -dist; dc <= dist; dc++) {
+    if (dr===0&&dc===0) continue;
+    const r=row+dr, c=col+dc;
+    if (r>=0&&r<BOARD_SIZE&&c>=0&&c<BOARD_SIZE&&board[r][c]!==0) return true;
+  }
+  return false;
+}
+
+function evaluatePos(board, row, col, player) {
+  let score = 0, threats = 0;
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  board[row][col] = player;
+  for (const [dr, dc] of dirs) {
+    let cnt = 1, open = 0;
+    let r = row + dr, c = col + dc;
+    while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === player) { cnt++; r += dr; c += dc; }
+    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === 0) open++;
+    r = row - dr; c = col - dc;
+    while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === player) { cnt++; r -= dr; c -= dc; }
+    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === 0) open++;
+    if (cnt >= 5) { score += 100000; threats += 3; }
+    else if (cnt === 4) { score += open === 2 ? 50000 : open === 1 ? 5000 : 0; if (open >= 1) threats++; }
+    else if (cnt === 3) { score += open === 2 ? 3000 : open === 1 ? 300 : 0; if (open === 2) threats++; }
+    else if (cnt === 2) score += open === 2 ? 200 : open === 1 ? 30 : 0;
+    else if (cnt === 1) score += open === 2 ? 10 : open === 1 ? 2 : 0;
+  }
+  if (threats >= 2) score += 80000;
+  board[row][col] = 0;
+  return score;
+}
+
+function aiMove(board) {
+  const stones = board.flat().filter(x => x !== 0).length;
+  if (stones === 0) return { row: 7, col: 7 };
+  const empty = [];
+  for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) {
+    if (board[r][c] !== 0) continue;
+    if (stones > 0 && !hasNeighbor(board, r, c, 2)) continue;
+    empty.push({ row: r, col: c });
+  }
+  if (!empty.length) return null;
+
+  // 1) win immediately
+  for (const { row, col } of empty) {
+    board[row][col] = 2;
+    if (checkWinLocal(board, 2)) { board[row][col] = 0; return { row, col }; }
+    board[row][col] = 0;
+  }
+  // 2) block opponent win
+  for (const { row, col } of empty) {
+    board[row][col] = 1;
+    if (checkWinLocal(board, 1)) { board[row][col] = 0; return { row, col }; }
+    board[row][col] = 0;
+  }
+
+  // 3) score candidates
+  let best = -Infinity, bestMoves = [];
+  for (const { row, col } of empty) {
+    const attack = evaluatePos(board, row, col, 2);
+    const defense = evaluatePos(board, row, col, 1);
+    const total = attack * 1.1 + defense;
+    if (total > best) { best = total; bestMoves = [{ row, col }]; }
+    else if (total === best) bestMoves.push({ row, col });
+  }
+  if (bestMoves.length) return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+  // 4) fallback: nearest to center
+  empty.sort((a, b) => (Math.abs(a.row - 7) + Math.abs(a.col - 7)) - (Math.abs(b.row - 7) + Math.abs(b.col - 7)));
+  return empty[0];
+}
+
 const PATTERNS = [
-  { id: 'default', name: '默认', emoji: '⚫' },
-  { id: 'star', name: '星星', emoji: '⭐' },
-  { id: 'butterfly', name: '蝴蝶', emoji: '🦋' },
-  { id: 'flower', name: '花朵', emoji: '🌸' },
-  { id: 'leaf', name: '叶子', emoji: '🍃' },
-  { id: 'cat', name: '猫头', emoji: '🐱' },
-  { id: 'dog', name: '狗头', emoji: '🐶' },
+  { id: 'default', name: 'é»è®¤', emoji: 'â«' },
+  { id: 'star', name: 'ææ', emoji: 'â­' },
+  { id: 'butterfly', name: 'è´è¶', emoji: 'ð¦' },
+  { id: 'flower', name: 'è±æµ', emoji: 'ð¸' },
+  { id: 'leaf', name: 'å¶å­', emoji: 'ð' },
+  { id: 'cat', name: 'ç«å¤´', emoji: 'ð±' },
+  { id: 'dog', name: 'çå¤´', emoji: 'ð¶' },
 ];
 
-const EMOJIS = ['😊','👍','😂','😮','😢','😡','🎉','💪'];
+const EMOJIS = ['ð','ð','ð','ð®','ð¢','ð¡','ð','ðª'];
 
 let matchPollTimer = null, gamePollTimer = null, challengePollTimer = null, challengeSentTimer = null, pingTimer = null, emojiPollTimer = null, friendsTimer = null;
 
@@ -46,8 +152,8 @@ async function api(url, opts = {}) {
   const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); } catch { throw new Error('请求失败'); }
-  if (!res.ok) throw new Error(data.error || '请求失败');
+  try { data = JSON.parse(text); } catch { throw new Error('è¯·æ±å¤±è´¥'); }
+  if (!res.ok) throw new Error(data.error || 'è¯·æ±å¤±è´¥');
   return data;
 }
 
@@ -75,7 +181,7 @@ const apiGetEmojis = (mid,since) => api(`/api/game/emojis?matchId=${mid}&since=$
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 const ACHIEVEMENTS = [
-  [100,'棋迹暖暖·咪咪嘛嘛'],[90,'夏司逆'],[80,'郝利亥'],[60,'甄琮明'],[40,'白下客'],[20,'朱逸枝']
+  [100,'æ£è¿¹ææÂ·åªåªåå'],[90,'å¤å¸é'],[80,'éå©äº¥'],[60,'çç®æ'],[40,'ç½ä¸å®¢'],[20,'æ±é¸æ']
 ];
 function calcWinRate(u) { const g=(u.recentGames||[]).filter(x=>x); return g.length?Math.round(g.filter(r=>r==='win').length/g.length*100):0; }
 function getAchievement(wr) { for(const[th,n]of ACHIEVEMENTS)if(wr>=th)return n; return ''; }
@@ -115,13 +221,13 @@ $('loginPassword').addEventListener('keydown', e => { if (e.key==='Enter') handl
 
 async function handleLogin() {
   const u=$('loginUsername').value.trim(), p=$('loginPassword').value.trim();
-  if (!u||!p) { $('loginError').textContent='请输入账号和密码'; return; }
-  $('loginError').textContent=''; $('loginBtn').disabled=true; $('loginBtn').textContent='登录中...';
+  if (!u||!p) { $('loginError').textContent='è¯·è¾å¥è´¦å·åå¯ç '; return; }
+  $('loginError').textContent=''; $('loginBtn').disabled=true; $('loginBtn').textContent='ç»å½ä¸­...';
   try {
     state.user = await apiLogin(u,p);
     enterLobby();
   } catch(e) { $('loginError').textContent=e.message; }
-  $('loginBtn').disabled=false; $('loginBtn').textContent='登录 / 注册';
+  $('loginBtn').disabled=false; $('loginBtn').textContent='ç»å½ / æ³¨å';
 }
 
 // ============ LOBBY ============
@@ -138,8 +244,8 @@ function refreshLobby() {
   const u=state.user, wr=calcWinRate(u);
   $('lobbyUsername').textContent = u.username;
   $('lobbyAchievement').textContent = getAchievement(wr);
-  $('lobbyScore').textContent = u.score+'分';
-  $('lobbyWinRate').textContent = '胜率 '+wr+'%';
+  $('lobbyScore').textContent = u.score+'å';
+  $('lobbyWinRate').textContent = 'èç '+wr+'%';
   $('lobbyWins').textContent = u.wins;
   $('lobbyLosses').textContent = u.losses;
   $('lobbyDraws').textContent = u.draws;
@@ -160,25 +266,26 @@ function stopPing() { if(pingTimer) { clearInterval(pingTimer); pingTimer=null; 
 
 // ============ MATCHMAKING ============
 $('matchBtn').addEventListener('click', toggleMatch);
+$('aiBtn').addEventListener('click', ()=>{ if(!state.isPlaying) startAIGame(); });
 
 async function toggleMatch() {
   if (state.isMatching) {
     try { await apiLeaveMatch(state.user.id); } catch {}
     stopMatchPolling(); state.isMatching=false;
-    $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+    $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
     return;
   }
   if (state.isPlaying) return;
   state.isMatching=true;
-  $('matchBtn').textContent='⏳ 取消匹配'; $('matchBtn').className='match-btn matching'; $('matchInfo').textContent='正在寻找对手...';
+  $('matchBtn').textContent='â³ åæ¶å¹é'; $('matchBtn').className='match-btn matching'; $('matchInfo').textContent='æ­£å¨å¯»æ¾å¯¹æ...';
   try {
     const r = await apiJoinMatch(state.user.id, state.selectedPattern);
     if (r.status==='matched') {
-      state.isMatching=false; $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+      state.isMatching=false; $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
       startGame(r.matchId, r.opponent, r.color, r.myOppPattern);
     } else startMatchPolling();
   } catch(e) {
-    state.isMatching=false; $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='匹配失败: '+e.message;
+    state.isMatching=false; $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='å¹éå¤±è´¥: '+e.message;
   }
 }
 
@@ -189,7 +296,7 @@ function startMatchPolling() {
       const r = await apiMatchStatus(state.user.id);
       if (r.status==='matched') {
         stopMatchPolling(); state.isMatching=false;
-        $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+        $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
         startGame(r.matchId, r.opponent, r.color, r.myOppPattern);
       }
     } catch {}
@@ -213,16 +320,16 @@ async function handleSearch() {
       `<div class="search-result-item">
         <span class="online-dot ${x.online?'on':'off'}"></span>
         <span class="sr-name">${esc(x.username)}</span>
-        <span class="sr-score">${x.score}分</span>
+        <span class="sr-score">${x.score}å</span>
         ${
           friendIds.has(x.id)
-          ? '<span class="already-friend">已是好友</span>'
-          : `<button class="small-btn btn-add" onclick="addFriend(${x.id})">＋好友</button>`
+          ? '<span class="already-friend">å·²æ¯å¥½å</span>'
+          : `<button class="small-btn btn-add" onclick="addFriend(${x.id})">ï¼å¥½å</button>`
         }
-        <button class="small-btn btn-challenge" onclick="sendChallenge(${x.id},'${esc(x.username)}')">挑战</button>
+        <button class="small-btn btn-challenge" onclick="sendChallenge(${x.id},'${esc(x.username)}')">ææ</button>
       </div>`
-    ).join('')||'<p class="empty-hint">未找到玩家</p>';
-  } catch { c.innerHTML='<p class="empty-hint">搜索失败</p>'; }
+    ).join('')||'<p class="empty-hint">æªæ¾å°ç©å®¶</p>';
+  } catch { c.innerHTML='<p class="empty-hint">æç´¢å¤±è´¥</p>'; }
 }
 
 async function addFriend(fid) {
@@ -232,22 +339,22 @@ async function addFriend(fid) {
 async function sendChallenge(tuid,tname) {
   try {
     const r = await apiSendChallenge(state.user.id, tuid, state.selectedPattern);
-    state.waitingForChallenge=r.challengeId; state.waitingTargetName=tname||'对手';
+    state.waitingForChallenge=r.challengeId; state.waitingTargetName=tname||'å¯¹æ';
     updateMatchAreaForChallenge(); startChallengeSentPolling(); $('searchResults').innerHTML='';
   } catch(e) { alert(e.message); }
 }
 
 function updateMatchAreaForChallenge() {
   if (state.waitingForChallenge) {
-    $('matchBtn').disabled=true; $('matchBtn').textContent='⏳ 等待回应';
+    $('matchBtn').disabled=true; $('matchBtn').textContent='â³ ç­å¾ååº';
     $('matchBtn').className='match-btn matching';
-    $('matchInfo').innerHTML=`等待 ${esc(state.waitingTargetName)} 接受挑战... <button class="small-btn btn-decline" onclick="cancelSentChallenge()">取消</button>`;
+    $('matchInfo').innerHTML=`ç­å¾ ${esc(state.waitingTargetName)} æ¥åææ... <button class="small-btn btn-decline" onclick="cancelSentChallenge()">åæ¶</button>`;
   }
 }
 
 function clearMatchAreaForChallenge() {
   state.waitingForChallenge=null; state.waitingTargetName='';
-  $('matchBtn').disabled=false; $('matchBtn').textContent='🎮 匹配对战';
+  $('matchBtn').disabled=false; $('matchBtn').textContent='ð® å¹éå¯¹æ';
   $('matchBtn').className='match-btn'; $('matchInfo').innerHTML='';
 }
 
@@ -267,7 +374,7 @@ async function pollSentChallenges() {
   try {
     const [sl,ms]=await Promise.all([apiSentChallenges(state.user.id),apiMatchStatus(state.user.id)]);
     if(ms.status==='matched') { stopChallengeSentPolling();stopChallengePolling();clearMatchAreaForChallenge();startGame(ms.matchId,ms.opponent,ms.color,ms.myOppPattern); return; }
-    if(!sl.some(c=>c.id===state.waitingForChallenge)) { stopChallengeSentPolling();clearMatchAreaForChallenge();$('matchInfo').textContent='挑战已被拒绝或已取消'; }
+    if(!sl.some(c=>c.id===state.waitingForChallenge)) { stopChallengeSentPolling();clearMatchAreaForChallenge();$('matchInfo').textContent='ææå·²è¢«æç»æå·²åæ¶'; }
   } catch {}
 }
 
@@ -279,11 +386,11 @@ async function refreshFriends() {
       `<div class="friend-item">
         <span class="online-dot ${x.online?'on':'off'}"></span>
         <span class="fr-name">${esc(x.username)}</span>
-        <span class="fr-score">${x.score}分</span>
-        <button class="small-btn btn-invite" onclick="sendChallenge(${x.id},'${esc(x.username)}')">邀请</button>
-        <button class="small-btn btn-remove" onclick="removeFriend(${x.id})">✕</button>
+        <span class="fr-score">${x.score}å</span>
+        <button class="small-btn btn-invite" onclick="sendChallenge(${x.id},'${esc(x.username)}')">éè¯·</button>
+        <button class="small-btn btn-remove" onclick="removeFriend(${x.id})">â</button>
       </div>`
-    ).join(''):'<p class="empty-hint">暂无好友</p>';
+    ).join(''):'<p class="empty-hint">ææ å¥½å</p>';
   } catch {}
 }
 async function removeFriend(fid) { try{await apiRemoveFriend(state.user.id,fid);refreshFriends()}catch{} }
@@ -297,10 +404,10 @@ async function refreshChallenges() {
   try {
     const l=await apiGetChallenges(state.user.id);
     $('challengesList').innerHTML=l.length?l.map(c=>
-      `<div class="challenge-item"><span style="flex:1">${esc(c.fromUsername)} (${c.fromScore}分) 发起了挑战</span>
-        <button class="small-btn btn-accept" onclick="acceptChallenge(${c.id})">接受</button>
-        <button class="small-btn btn-decline" onclick="declineChallenge(${c.id})">拒绝</button></div>`
-    ).join(''):'<p class="empty-hint">暂无挑战</p>';
+      `<div class="challenge-item"><span style="flex:1">${esc(c.fromUsername)} (${c.fromScore}å) åèµ·äºææ</span>
+        <button class="small-btn btn-accept" onclick="acceptChallenge(${c.id})">æ¥å</button>
+        <button class="small-btn btn-decline" onclick="declineChallenge(${c.id})">æç»</button></div>`
+    ).join(''):'<p class="empty-hint">ææ ææ</p>';
   } catch {}
 }
 
@@ -315,14 +422,16 @@ async function declineChallenge(cid) { try{await apiRespondChallenge(cid,false);
 // ============ GAME ============
 function startGame(matchId, opponent, color, oppPattern) {
   state.matchId=matchId; state.opponent=opponent; state.myColor=color;
-  state.isPlaying=true; state.gameState=null; state.gameOverShown=false; state.previewCell=null;
+  state.isPlaying=true; state.gameState=null; state.gameOverShown=false; state.previewCell=null; state.lastMove=null;
+  state.winLine=null; state.flashOn=false; state.delayedHandled=false;
+  if(state.flashTimer){clearInterval(state.flashTimer);state.flashTimer=null;}
   state.waitingForChallenge=null; stopChallengeSentPolling(); clearMatchAreaForChallenge();
   initBoardLocal();
   showScreen('gameScreen');
   const myWr=calcWinRate(state.user); const oppWr=calcWinRate(opponent);
   $('gameMyName').textContent=state.user.username; $('gameMyAchievement').textContent=getAchievement(myWr);
-  $('gameMyScore').textContent=state.user.score+'分';
-  $('gameOpponentName').textContent=opponent.username; $('gameOpponentScore').textContent=opponent.score+'分';
+  $('gameMyScore').textContent=state.user.score+'å';
+  $('gameOpponentName').textContent=opponent.username; $('gameOpponentScore').textContent=opponent.score+'å';
   $('gameOpponentAchievement').textContent=getAchievement(oppWr);
   $('gameResultOverlay').style.display='none';
   lastEmojiTimestamp=Date.now();
@@ -331,19 +440,47 @@ function startGame(matchId, opponent, color, oppPattern) {
 
 function initBoardLocal() { state.board=Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(EMPTY)); }
 
+function checkWinLocal(b,p) {
+  for(let r=0;r<BOARD_SIZE;r++) for(let c=0;c<BOARD_SIZE;c++) {
+    if(b[r][c]!==p) continue;
+    for(const[dr,dc] of [[1,0],[0,1],[1,1],[1,-1]]){let k=1;while(k<5){const nr=r+dr*k,nc=c+dc*k;if(nr<0||nr>=BOARD_SIZE||nc<0||nc>=BOARD_SIZE||b[nr][nc]!==p)break;k++}if(k>=5)return!0}
+  }
+  return!1;
+}
+
+function startAIGame() {
+  state.isPlaying=true; state.isAIGame=true; state.aiWaiting=false;
+  state.matchId=null; state.opponent={id:'ai',username:'AI',score:0}; state.myColor='black';
+  state.gameState={currentPlayer:1,gameOver:false,winner:null};
+  state.previewCell=null; state.gameOverShown=false; state.lastMove=null;
+  state.winLine=null; state.flashOn=false; state.delayedHandled=false;
+  if(state.flashTimer){clearInterval(state.flashTimer);state.flashTimer=null;}
+  state.myPattern=state.selectedPattern; state.opponentPattern='default';
+  initBoardLocal();
+  showScreen('gameScreen');
+  const wr=calcWinRate(state.user);
+  $('gameMyName').textContent=state.user.username; $('gameMyAchievement').textContent=getAchievement(wr);
+  $('gameMyScore').textContent=state.user.score+'å';
+  $('gameOpponentName').textContent='AI'; $('gameOpponentAchievement').textContent='';
+  $('gameOpponentScore').textContent='0å';
+  $('gameResultOverlay').style.display='none';
+  updateGameTurnUI(state.gameState); renderBoard();
+}
+
 function updateGameTurnUI(gs) {
   const el=$('gameTurnIndicator');
+  if(state.aiWaiting) { el.textContent='ð¤ AIæèä¸­...'; return; }
   if(!gs||gs.gameOver) {
     if(gs&&gs.gameOver) {
-      if(gs.winner===state.user.id) el.textContent='🎉 你赢了！';
-      else if(gs.winner===null) el.textContent='🤝 平局';
-      else el.textContent='😞 你输了';
-    } else el.textContent='等待中...';
+      if(gs.winner===state.user.id||(state.isAIGame&&gs.winner===state.user.id)) el.textContent='ð ä½ èµ¢äºï¼';
+      else if(gs.winner===null) el.textContent='ð¤ å¹³å±';
+      else el.textContent='ð ä½ è¾äº';
+    } else el.textContent='ç­å¾ä¸­...';
     return;
   }
-  const myTurn=(state.myColor==='black'&&gs.currentPlayer===1)||(state.myColor==='white'&&gs.currentPlayer===2);
-  const sec=Math.ceil((gs.turnRemaining||30000)/1000);
-  el.textContent=myTurn?`👆 轮到你了 (${sec}秒)`:'⏳ 等待对手落子...';
+  const myTurn=state.isAIGame||(state.myColor==='black'&&gs.currentPlayer===1)||(state.myColor==='white'&&gs.currentPlayer===2);
+  const sec=state.isAIGame?'--':Math.ceil((gs.turnRemaining||30000)/1000);
+  el.textContent=myTurn?`ð è½®å°ä½ äº (${sec}ç§)`:'â³ ç­å¾å¯¹æè½å­...';
 }
 
 function startGamePolling() { stopGamePolling(); gamePollTimer=setInterval(pollGameState,1000); pollGameState(); }
@@ -357,38 +494,49 @@ async function pollGameState() {
     state.myPattern=gs.myPattern; state.opponentPattern=gs.opponentPattern;
     if(gs.opponent) $('gameOpponentAchievement').textContent=getAchievement(calcWinRate(gs.opponent));
     renderBoard(); updateGameTurnUI(gs);
-    if(gs.gameOver&&!state.gameOverShown) { state.gameOverShown=true; showGameResult(gs); }
+    if(gs.gameOver&&!state.gameOverShown) {
+      if(gs.winner!==null&&gs.winLine&&gs.winLine.length) delayedGameOver(gs.winner, gs.winLine);
+      else { state.gameOverShown=true; showGameResult(gs); }
+    }
   } catch {
-    if(!state.gameOverShown) { state.gameOverShown=true; $('gameResultOverlay').style.display='flex'; $('resultTitle').textContent='连接中断'; }
+    if(!state.gameOverShown) { state.gameOverShown=true; $('gameResultOverlay').style.display='flex'; $('resultTitle').textContent='è¿æ¥ä¸­æ­'; }
     stopGamePolling();
   }
 }
 
 async function showGameResult(gs) {
   $('gameResultOverlay').style.display='flex';
-  if(gs.winner===state.user.id) $('resultTitle').textContent='🎉 你赢了！';
-  else if(gs.winner===null) $('resultTitle').textContent='🤝 平局';
-  else $('resultTitle').textContent='😞 你输了';
-  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; const wr=calcWinRate(fresh); $('gameMyScore').textContent=fresh.score+'分'; $('gameMyAchievement').textContent=getAchievement(wr); } catch {}
+  const resign = gs.winner && gs.winner!=='ai' && (!gs.winLine||!gs.winLine.length);
+  if(gs.winner===state.user.id) $('resultTitle').textContent=resign?'ð å¯¹æ¹å·²è®¤è¾ï¼èªå¨è·è':'ð ä½ èµ¢äºï¼';
+  else if(gs.winner===null) $('resultTitle').textContent='ð¤ å¹³å±';
+  else if(gs.winner==='ai'&&state.isAIGame) $('resultTitle').textContent='ð ä½ è¾äº';
+  else $('resultTitle').textContent='ð ä½ è¾äº';
+  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; const wr=calcWinRate(fresh); $('gameMyScore').textContent=fresh.score+'å'; $('gameMyAchievement').textContent=getAchievement(wr); } catch {}
 }
 
 $('backToLobbyBtn').addEventListener('click',()=>{
-  state.isPlaying=false; state.matchId=null; state.opponent=null;
+  state.isPlaying=false; state.matchId=null; state.opponent=null; state.isAIGame=false; state.aiWaiting=false;
+  if(state.flashTimer){clearInterval(state.flashTimer);state.flashTimer=null;}
+  state.delayedHandled=false;
   $('gameResultOverlay').style.display='none'; stopGamePolling(); stopEmojiPolling();
   enterLobby();
 });
 
 $('resignBtn').addEventListener('click',async()=>{
+  if(state.isAIGame) { if(confirm('ç¡®å®è®¤è¾åï¼')) { delayedGameOver('ai', []); } return; }
   if(!state.matchId||state.gameState?.gameOver) return;
-  if(!confirm('确定认输吗？')) return;
+  if(!confirm('ç¡®å®è®¤è¾åï¼')) return;
   try{await apiResign(state.matchId,state.user.id)}catch{}
 });
 
 // ============ DOUBLE-CLICK BOARD ============
 canvas.addEventListener('click', async (e) => {
-  if(!state.isPlaying||!state.gameState||state.gameState.gameOver) return;
-  const myTurn=(state.myColor==='black'&&state.gameState.currentPlayer===1)||(state.myColor==='white'&&state.gameState.currentPlayer===2);
-  if(!myTurn) return;
+  if(!state.isPlaying||state.gameState?.gameOver||state.aiWaiting) return;
+  if(!state.isAIGame) {
+    if(!state.gameState) return;
+    const myTurn=(state.myColor==='black'&&state.gameState.currentPlayer===1)||(state.myColor==='white'&&state.gameState.currentPlayer===2);
+    if(!myTurn) return;
+  }
   const rect=canvas.getBoundingClientRect();
   const sx=canvas.width/rect.width, sy=canvas.height/rect.height;
   const x=(e.clientX-rect.left)*sx, y=(e.clientY-rect.top)*sy;
@@ -398,15 +546,29 @@ canvas.addEventListener('click', async (e) => {
 
   if(state.previewCell && state.previewCell.row===row && state.previewCell.col===col) {
     state.previewCell=null;
-    try {
-      const result=await apiGameMove(state.matchId,state.user.id,row,col);
-      const pv=state.myColor==='black'?1:2;
-      state.board[row][col]=pv;
-      state.gameState.currentPlayer=pv===1?2:1;
-      if(result.gameOver) { state.gameState.gameOver=true; state.gameState.winner=result.winner; }
-      renderBoard(); updateGameTurnUI(state.gameState);
-      if(result.gameOver&&!state.gameOverShown) { state.gameOverShown=true; showGameResult(state.gameState); }
-    } catch { renderBoard(); }
+    if(state.isAIGame) {
+      state.board[row][col]=BLACK; state.lastMove={row,col};
+      if(checkWinLocal(state.board,BLACK)) { delayedGameOver(state.user.id, getWinLineLocal(state.board,BLACK)); return; }
+      if(state.board.every(r=>r.every(c=>c!==EMPTY))) { state.gameState.gameOver=true; state.gameState.winner=null; renderBoard(); showGameResult(state.gameState); return; }
+      state.gameState.currentPlayer=2; state.aiWaiting=true; updateGameTurnUI(state.gameState); renderBoard();
+      try {
+        const r=aiMove(state.board);
+        if(r&&r.row!=null&&r.col!=null&&state.board[r.row][r.col]===EMPTY) { state.board[r.row][r.col]=WHITE; state.lastMove={row:r.row,col:r.col}; }
+      } catch {}
+      state.aiWaiting=false;
+      if(checkWinLocal(state.board,WHITE)) { delayedGameOver('ai', getWinLineLocal(state.board,WHITE)); return; }
+      if(state.board.every(r=>r.every(c=>c!==EMPTY))) { state.gameState.gameOver=true; state.gameState.winner=null; renderBoard(); showGameResult(state.gameState); return; }
+      state.gameState.currentPlayer=1; updateGameTurnUI(state.gameState); renderBoard();
+    } else {
+      try {
+        const result=await apiGameMove(state.matchId,state.user.id,row,col);
+        const pv=state.myColor==='black'?1:2;
+        state.board[row][col]=pv; state.lastMove={row,col};
+        state.gameState.currentPlayer=pv===1?2:1;
+        if(result.gameOver) { delayedGameOver(result.winner, getWinLineLocal(state.board,pv)); return; }
+        renderBoard(); updateGameTurnUI(state.gameState);
+      } catch { renderBoard(); }
+    }
   } else {
     state.previewCell={row,col};
     renderBoard();
@@ -464,11 +626,19 @@ function renderBoard() {
   for(let r=0;r<BOARD_SIZE;r++) for(let c=0;c<BOARD_SIZE;c++) if(state.board[r][c]!==EMPTY) drawStone(r,c,state.board[r][c]);
 
   const gs=state.gameState;
-  if(gs&&gs.winLine) gs.winLine.forEach(cell=>{ctx.beginPath();ctx.arc(MARGIN+cell.col*CELL_SIZE,MARGIN+cell.row*CELL_SIZE,17,0,Math.PI*2);ctx.fillStyle='rgba(255,50,50,0.25)';ctx.fill()});
 
-  if(gs&&gs.lastMove&&!gs.gameOver) {
-    const {row,col}=gs.lastMove;
-    ctx.fillStyle='#e74c3c'; ctx.beginPath();ctx.arc(MARGIN+col*CELL_SIZE,MARGIN+row*CELL_SIZE,4,0,Math.PI*2);ctx.fill();
+  if (state.winLine && state.winLine.length) {
+    state.winLine.forEach(cell=>{
+      ctx.beginPath(); ctx.arc(MARGIN+cell.col*CELL_SIZE,MARGIN+cell.row*CELL_SIZE,18,0,Math.PI*2);
+      ctx.strokeStyle=state.flashOn?'#ffdd00':'rgba(255,200,0,0.15)'; ctx.lineWidth=state.flashOn?4:2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(MARGIN+cell.col*CELL_SIZE,MARGIN+cell.row*CELL_SIZE,20,0,Math.PI*2);
+      ctx.strokeStyle=state.flashOn?'rgba(255,200,0,0.3)':'rgba(255,200,0,0.05)'; ctx.lineWidth=state.flashOn?6:3; ctx.stroke();
+    });
+  }
+
+  const lm = state.lastMove || (gs&&gs.lastMove);
+  if(lm&&!gs?.gameOver) {
+    ctx.fillStyle='#e74c3c'; ctx.beginPath();ctx.arc(MARGIN+lm.col*CELL_SIZE,MARGIN+lm.row*CELL_SIZE,4,0,Math.PI*2);ctx.fill();
   }
 
   if(state.previewCell) {
@@ -516,7 +686,7 @@ function drawPatternPiece(cx,x,y,r,pattern,isBlack) {
 async function refreshLeaderboardLobby() {
   try {
     const l=await apiLeaderboard();
-    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.winRate}%</span></li>`).join('')||'<p class="empty-hint">暂无数据</p>';
+    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.winRate}%</span></li>`).join('')||'<p class="empty-hint">ææ æ°æ®</p>';
   } catch {}
 }
 
@@ -526,3 +696,4 @@ $('lobbyLogoutBtn').addEventListener('click',()=>{
   state.user=null; state.isPlaying=false; state.isMatching=false; state.waitingForChallenge=null;
   showScreen('loginScreen'); $('loginUsername').value=''; $('loginPassword').value=''; $('loginError').textContent='';
 });
+
