@@ -2,27 +2,32 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 app.use(express.json());
 
-// 强制所有响应 UTF-8（解决 Render 乱码核心）
+// ========== 修复 Render HTTPS 乱码核心开始 ==========
+// 全局强制 UTF-8
 app.use((req, res, next) => {
   res.charset = 'utf-8';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   next();
 });
 
-// 静态文件也强制 UTF-8
+// 静态文件强制 UTF-8
 app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.charset = 'utf-8';
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+    if (path.endsWith('.js') || path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    }
   }
 }));
 
-// 增强 send 兜底
+// send 兜底编码
 app.use((req, res, next) => {
   const _send = res.send.bind(res);
   res.send = function(body) {
@@ -35,6 +40,7 @@ app.use((req, res, next) => {
   };
   next();
 });
+// ========== 修复乱码核心结束 ==========
 
 const DB_PATH = path.join(__dirname, 'game-data.json');
 function readDB() { try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8')); } catch { return { users: [], nextId: 1 }; } }
@@ -115,11 +121,11 @@ setInterval(() => {
 app.post('/api/login', (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'è¯·è¾å¥è´¦å·åå¯ç ' });
+    if (!username || !password) return res.status(400).json({ error: '请输入账号和密码' });
     const db = readDB();
     let u = db.users.find(x => x.username === username);
     if (u) {
-      if (!u.password || !bcrypt.compareSync(password, u.password)) return res.status(401).json({ error: 'å¯ç éè¯¯' });
+      if (!u.password || !bcrypt.compareSync(password, u.password)) return res.status(401).json({ error: '密码错误' });
       const { password:_, ...s } = u;
       onlineUsers.set(u.id, Date.now());
       return res.json({ ...s, friends: s.friends||[] });
@@ -132,7 +138,7 @@ app.post('/api/login', (req, res) => {
     res.json({ ...s, friends: [] });
   } catch(e) {
     console.error('Login error:', e);
-    res.status(500).json({ error: 'ç»å½å¤±è´¥' });
+    res.status(500).json({ error: '登录失败' });
   }
 });
 
@@ -160,18 +166,18 @@ app.get('/api/friends', (req, res) => {
   const uid = parseInt(req.query.userId);
   const db = readDB();
   const u = db.users.find(x => x.id === uid);
-  if (!u) return res.status(404).json({ error: 'ç¨æ·ä¸å­å¨' });
+  if (!u) return res.status(404).json({ error: '用户不存在' });
   const n = Date.now();
   res.json(db.users.filter(x => (u.friends||[]).includes(x.id)).map(x => ({ id:x.id, username:x.username, nickname:x.nickname, score:x.score, online: onlineUsers.has(x.id)&&n-onlineUsers.get(x.id)<8000 })));
 });
 
 app.post('/api/friends/add', (req, res) => {
   const { userId, friendId } = req.body;
-  if (!userId||!friendId||userId===friendId) return res.status(400).json({ error: 'åæ°æ æ' });
+  if (!userId||!friendId||userId===friendId) return res.status(400).json({ error: '参数无效' });
   const db = readDB();
   const u=db.users.find(x=>x.id===userId), f=db.users.find(x=>x.id===friendId);
-  if (!u||!f) return res.status(404).json({ error: 'ç¨æ·ä¸å­å¨' });
-  if ((u.friends||[]).includes(friendId)) return res.status(400).json({ error: 'å·²ç»æ¯å¥½å' });
+  if (!u||!f) return res.status(404).json({ error: '用户不存在' });
+  if ((u.friends||[]).includes(friendId)) return res.status(400).json({ error: '已经是好友' });
   u.friends=[...(u.friends||[]), friendId]; f.friends=[...(f.friends||[]), userId];
   writeDB(db); res.json({ success: true });
 });
@@ -186,11 +192,11 @@ app.delete('/api/friends/:userId/:friendId', (req, res) => {
 function recentWR(u) { const g=(u.recentGames||[]).filter(x=>x); return g.length ? g.filter(r=>r==='win').length/g.length : 0; }
 app.post('/api/match/join', (req, res) => {
   const { userId, pattern } = req.body;
-  if (!userId) return res.status(400).json({ error: 'ç¼ºå° userId' });
+  if (!userId) return res.status(400).json({ error: '缺少 userId' });
   if (activeMatches[userId]) return res.json({ status:'matched', ...activeMatches[userId] });
   if (matchQueue.some(e=>e.userId===userId)) return res.json({ status:'waiting' });
   const db = readDB(); const u = db.users.find(x=>x.id===userId);
-  if (!u) return res.status(404).json({ error: 'ç¨æ·ä¸å­å¨' });
+  if (!u) return res.status(404).json({ error: '用户不存在' });
   if (matchQueue.length > 0) {
     const myWr=recentWR(u);
     let bi=0, bd=Math.abs(recentWR(matchQueue[0])-myWr);
@@ -225,14 +231,14 @@ app.get('/api/match/status', (req, res) => {
 // CHALLENGES
 app.post('/api/challenge/send', (req, res) => {
   const { fromUserId, toUserId, pattern } = req.body;
-  if (!fromUserId||!toUserId) return res.status(400).json({ error: 'ç¼ºå°åæ°' });
-  if (fromUserId===toUserId) return res.status(400).json({ error: 'ä¸è½ææèªå·±' });
+  if (!fromUserId||!toUserId) return res.status(400).json({ error: '缺少参数' });
+  if (fromUserId===toUserId) return res.status(400).json({ error: '不能挑战自己' });
   const db=readDB(); const from=db.users.find(u=>u.id===fromUserId), to=db.users.find(u=>u.id===toUserId);
-  if (!from||!to) return res.status(404).json({ error:'ç¨æ·ä¸å­å¨' });
+  if (!from||!to) return res.status(404).json({ error:'用户不存在' });
   if (challenges.some(c=>c.fromUserId===fromUserId&&c.toUserId===toUserId&&c.status==='pending'))
-    return res.status(400).json({ error:'å·²æå¾å¤ççææ' });
+    return res.status(400).json({ error:'已有待处理的挑战' });
   if (challenges.some(c=>c.fromUserId===toUserId&&c.toUserId===fromUserId&&c.status==='pending'))
-    return res.status(400).json({ error:'å¯¹æ¹å·²åä½ åèµ·ææ' });
+    return res.status(400).json({ error:'对方已向你发起挑战' });
   const c={ id:challengeIdCounter++, fromUserId, fromUsername:from.username, fromScore:from.score, toUserId, toUsername:to.username, status:'pending', pattern:pattern||'default', createdAt:Date.now() };
   challenges.push(c); res.json({ challengeId:c.id });
 });
@@ -245,17 +251,17 @@ app.get('/api/challenges/sent', (req, res) => {
 app.post('/api/challenge/respond', (req, res) => {
   const { challengeId, accept, pattern } = req.body;
   const c = challenges.find(c=>c.id===challengeId&&c.status==='pending');
-  if (!c) return res.status(404).json({ error:'ææä¸å­å¨æå·²å¤ç' });
+  if (!c) return res.status(404).json({ error:'挑战不存在或已处理' });
   if (!accept) { c.status='declined'; return res.json({ success:true }); }
   c.status='accepted';
   const db=readDB(); const from=db.users.find(u=>u.id===c.fromUserId), to=db.users.find(u=>u.id===c.toUserId);
-  if (!from||!to) return res.status(404).json({ error:'ç¨æ·ä¸å­å¨' });
+  if (!from||!to) return res.status(404).json({ error:'用户不存在' });
   const ca=Math.random()<0.5?'black':'white', cb=ca==='black'?'white':'black';
   const mid=matchIdCounter++;
   const game=createGame(mid, { id:c.toUserId, username:to.username, score:to.score, pattern:pattern||'default', wins:to.wins, losses:to.losses, draws:to.draws, recentGames:to.recentGames||[] }, { id:c.fromUserId, username:from.username, score:from.score, pattern:c.pattern||'default', wins:from.wins, losses:from.losses, draws:from.draws, recentGames:from.recentGames||[] }, ca, cb);
   activeGames[mid]=game;
   activeMatches[c.fromUserId]={ matchId:mid, opponent:{id:c.toUserId,username:to.username,score:to.score,wins:to.wins,losses:to.losses,draws:to.draws,recentGames:to.recentGames||[]}, color:cb, myOppPattern:pattern||'default' };
-  activeMatches[c.toUserId]={ matchId:mid, opponent:{id:c.fromUserId,username:from.username,score:from.score,wins:from.wins,losses:from.losses,draws:from.draws,recentGames:from.recentGames||[]}, color:ca, myOppPattern:c.pattern||'default' };
+  activeMatches[c.toUserId]={ matchId:mid, opponent:{id:c.fromUserId,username:from.username,score:from.score,wins:from.wins,losses:from.losses,draws:to.draws,recentGames:from.recentGames||[]}, color:ca, myOppPattern:c.pattern||'default' };
   res.json({ status:'matched', ...activeMatches[c.toUserId] });
 });
 
@@ -268,12 +274,12 @@ app.get('/api/challenges', (req, res) => {
 app.post('/api/game/move', (req, res) => {
   const { matchId, userId, row, col } = req.body;
   const g = activeGames[matchId];
-  if (!g) return res.status(404).json({ error: 'æ¸¸æä¸å­å¨' });
-  const p = g.players[userId]; if (!p) return res.status(403).json({ error:'æ æé' });
-  if (g.gameOver) return res.status(400).json({ error:'æ¸¸æå·²ç»æ' });
+  if (!g) return res.status(404).json({ error: '游戏不存在' });
+  const p = g.players[userId]; if (!p) return res.status(403).json({ error:'无权限' });
+  if (g.gameOver) return res.status(400).json({ error:'游戏已结束' });
   const pv = p.color==='black'?1:2;
-  if (g.currentPlayer!==pv) return res.status(400).json({ error:'è¿æ²¡è½®å°ä½ ' });
-  if (row<0||row>=BOARD_SIZE||col<0||col>=BOARD_SIZE||g.board[row][col]!==0) return res.status(400).json({ error:'æ æä½ç½®' });
+  if (g.currentPlayer!==pv) return res.status(400).json({ error:'还没轮到你' });
+  if (row<0||row>=BOARD_SIZE||col<0||col>=BOARD_SIZE||g.board[row][col]!==0) return res.status(400).json({ error:'无效位置' });
   g.board[row][col]=pv; g.lastMove={row,col};
   if (checkWin(g.board,row,col,pv)) { g.gameOver=true; g.winner=userId; g.winLine=getWinLine(g.board,row,col,pv); endGameAndUpdateScores(g); return res.json({success:true,gameOver:true,winner:userId}); }
   if (g.board.every(r=>r.every(c=>c!==0))) { g.gameOver=true; g.winner=null; endGameAndUpdateScores(g); return res.json({success:true,gameOver:true,winner:null}); }
@@ -283,17 +289,17 @@ app.post('/api/game/move', (req, res) => {
 
 app.get('/api/game/state', (req, res) => {
   const mid=parseInt(req.query.matchId), uid=parseInt(req.query.userId);
-  if (!mid||!uid) return res.status(400).json({ error:'ç¼ºå°åæ°' });
-  const g=activeGames[mid]; if (!g) return res.status(404).json({ error:'æ¸¸æä¸å­å¨' });
-  const p=g.players[uid]; if (!p) return res.status(403).json({ error:'æ æé' });
+  if (!mid||!uid) return res.status(400).json({ error:'缺少参数' });
+  const g=activeGames[mid]; if (!g) return res.status(404).json({ error:'游戏不存在' });
+  const p=g.players[uid]; if (!p) return res.status(403).json({ error:'无权限' });
   const opp=Object.values(g.players).find(x=>x.id!==uid)||null;
   res.json({ board:g.board, currentPlayer:g.currentPlayer, gameOver:g.gameOver, winner:g.winner, myColor:p.color, myPattern:g.patterns[uid], opponentPattern:opp?g.patterns[opp.id]:'default', opponent:opp, lastMove:g.lastMove, winLine:g.winLine, turnRemaining:Math.max(0,TURN_TIMEOUT-(Date.now()-g.turnStartedAt)) });
 });
 
 app.post('/api/game/resign', (req, res) => {
   const { matchId, userId } = req.body;
-  const g=activeGames[matchId]; if (!g||g.gameOver) return res.status(400).json({ error:'æ¸¸æå·²ç»æ' });
-  if (!g.players[userId]) return res.status(403).json({ error:'æ æé' });
+  const g=activeGames[matchId]; if (!g||g.gameOver) return res.status(400).json({ error:'游戏已结束' });
+  if (!g.players[userId]) return res.status(403).json({ error:'无权限' });
   g.gameOver=true; g.winner=parseInt(Object.keys(g.players).find(id=>parseInt(id)!==userId));
   g.winLine=[]; endGameAndUpdateScores(g);
   res.json({success:true,gameOver:true,winner:g.winner});
@@ -302,7 +308,7 @@ app.post('/api/game/resign', (req, res) => {
 // EMOJI
 app.post('/api/game/emoji', (req, res) => {
   const { matchId, userId, emoji } = req.body;
-  if (!matchId||!userId||!emoji) return res.status(400).json({ error:'ç¼ºå°åæ°' });
+  if (!matchId||!userId||!emoji) return res.status(400).json({ error:'缺少参数' });
   if (!gameEmojis[matchId]) gameEmojis[matchId]=[];
   gameEmojis[matchId].push({ userId, emoji, timestamp:Date.now() });
   res.json({ success:true });
@@ -325,13 +331,13 @@ app.get('/api/leaderboard', (req, res) => {
 
 app.get('/api/user/:id', (req, res) => {
   const db=readDB(); const u=db.users.find(x=>x.id===parseInt(req.params.id));
-  if (!u) return res.status(404).json({ error:'ç¨æ·ä¸å­å¨' });
+  if (!u) return res.status(404).json({ error:'用户不存在' });
   const {password:_, ...s}=u; res.json({...s, friends:s.friends||[]});
 });
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: 'æå¡å¨åé¨éè¯¯' });
+  res.status(500).json({ error: '服务器内部错误' });
 });
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
