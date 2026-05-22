@@ -118,16 +118,16 @@ function aiMove(board) {
 }
 
 const PATTERNS = [
-  { id: 'default', name: 'é»è®¤', emoji: 'â«' },
-  { id: 'star', name: 'ææ', emoji: 'â­' },
-  { id: 'butterfly', name: 'è´è¶', emoji: 'ð¦' },
-  { id: 'flower', name: 'è±æµ', emoji: 'ð¸' },
-  { id: 'leaf', name: 'å¶å­', emoji: 'ð' },
-  { id: 'cat', name: 'ç«å¤´', emoji: 'ð±' },
-  { id: 'dog', name: 'çå¤´', emoji: 'ð¶' },
+  { id: 'default', name: '默认', emoji: '⚫' },
+  { id: 'star', name: '星星', emoji: '⭐' },
+  { id: 'butterfly', name: '蝴蝶', emoji: '🦋' },
+  { id: 'flower', name: '花朵', emoji: '🌸' },
+  { id: 'leaf', name: '叶子', emoji: '🍃' },
+  { id: 'cat', name: '猫头', emoji: '🐱' },
+  { id: 'dog', name: '狗头', emoji: '🐶' },
 ];
 
-const EMOJIS = ['ð','ð','ð','ð®','ð¢','ð¡','ð','ðª'];
+const EMOJIS = ['😊','👍','😂','😮','😢','😡','🎉','💪'];
 
 let matchPollTimer = null, gamePollTimer = null, challengePollTimer = null, challengeSentTimer = null, pingTimer = null, emojiPollTimer = null, friendsTimer = null;
 
@@ -152,8 +152,8 @@ async function api(url, opts = {}) {
   const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); } catch { throw new Error('è¯·æ±å¤±è´¥'); }
-  if (!res.ok) throw new Error(data.error || 'è¯·æ±å¤±è´¥');
+  try { data = JSON.parse(text); } catch { throw new Error('请求失败'); }
+  if (!res.ok) throw new Error(data.error || '请求失败');
   return data;
 }
 
@@ -181,7 +181,7 @@ const apiGetEmojis = (mid,since) => api(`/api/game/emojis?matchId=${mid}&since=$
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 const ACHIEVEMENTS = [
-  [100,'æ£è¿¹ææÂ·åªåªåå'],[90,'å¤å¸é'],[80,'éå©äº¥'],[60,'çç®æ'],[40,'ç½ä¸å®¢'],[20,'æ±é¸æ']
+  [100,'棋迹暖暖·咪咪嘛嘛'],[90,'夏司逆'],[80,'郝利亥'],[60,'甄琮明'],[40,'白下客'],[20,'朱逸枝']
 ];
 function calcWinRate(u) { const g=(u.recentGames||[]).filter(x=>x); return g.length?Math.round(g.filter(r=>r==='win').length/g.length*100):0; }
 function getAchievement(wr) { for(const[th,n]of ACHIEVEMENTS)if(wr>=th)return n; return ''; }
@@ -221,13 +221,13 @@ $('loginPassword').addEventListener('keydown', e => { if (e.key==='Enter') handl
 
 async function handleLogin() {
   const u=$('loginUsername').value.trim(), p=$('loginPassword').value.trim();
-  if (!u||!p) { $('loginError').textContent='è¯·è¾å¥è´¦å·åå¯ç '; return; }
-  $('loginError').textContent=''; $('loginBtn').disabled=true; $('loginBtn').textContent='ç»å½ä¸­...';
+  if (!u||!p) { $('loginError').textContent='请输入账号和密码'; return; }
+  $('loginError').textContent=''; $('loginBtn').disabled=true; $('loginBtn').textContent='登录中...';
   try {
     state.user = await apiLogin(u,p);
     enterLobby();
   } catch(e) { $('loginError').textContent=e.message; }
-  $('loginBtn').disabled=false; $('loginBtn').textContent='ç»å½ / æ³¨å';
+  $('loginBtn').disabled=false; $('loginBtn').textContent='登录 / 注册';
 }
 
 // ============ LOBBY ============
@@ -244,8 +244,8 @@ function refreshLobby() {
   const u=state.user, wr=calcWinRate(u);
   $('lobbyUsername').textContent = u.username;
   $('lobbyAchievement').textContent = getAchievement(wr);
-  $('lobbyScore').textContent = u.score+'å';
-  $('lobbyWinRate').textContent = 'èç '+wr+'%';
+  $('lobbyScore').textContent = u.score+'分';
+  $('lobbyWinRate').textContent = '胜率 '+wr+'%';
   $('lobbyWins').textContent = u.wins;
   $('lobbyLosses').textContent = u.losses;
   $('lobbyDraws').textContent = u.draws;
@@ -272,20 +272,20 @@ async function toggleMatch() {
   if (state.isMatching) {
     try { await apiLeaveMatch(state.user.id); } catch {}
     stopMatchPolling(); state.isMatching=false;
-    $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+    $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
     return;
   }
   if (state.isPlaying) return;
   state.isMatching=true;
-  $('matchBtn').textContent='â³ åæ¶å¹é'; $('matchBtn').className='match-btn matching'; $('matchInfo').textContent='æ­£å¨å¯»æ¾å¯¹æ...';
+  $('matchBtn').textContent='⏳ 取消匹配'; $('matchBtn').className='match-btn matching'; $('matchInfo').textContent='正在寻找对手...';
   try {
     const r = await apiJoinMatch(state.user.id, state.selectedPattern);
     if (r.status==='matched') {
-      state.isMatching=false; $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+      state.isMatching=false; $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
       startGame(r.matchId, r.opponent, r.color, r.myOppPattern);
     } else startMatchPolling();
   } catch(e) {
-    state.isMatching=false; $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='å¹éå¤±è´¥: '+e.message;
+    state.isMatching=false; $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='匹配失败: '+e.message;
   }
 }
 
@@ -296,7 +296,7 @@ function startMatchPolling() {
       const r = await apiMatchStatus(state.user.id);
       if (r.status==='matched') {
         stopMatchPolling(); state.isMatching=false;
-        $('matchBtn').textContent='ð® å¹éå¯¹æ'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
+        $('matchBtn').textContent='🎮 匹配对战'; $('matchBtn').className='match-btn'; $('matchInfo').textContent='';
         startGame(r.matchId, r.opponent, r.color, r.myOppPattern);
       }
     } catch {}
@@ -320,16 +320,16 @@ async function handleSearch() {
       `<div class="search-result-item">
         <span class="online-dot ${x.online?'on':'off'}"></span>
         <span class="sr-name">${esc(x.username)}</span>
-        <span class="sr-score">${x.score}å</span>
+        <span class="sr-score">${x.score}分</span>
         ${
           friendIds.has(x.id)
-          ? '<span class="already-friend">å·²æ¯å¥½å</span>'
-          : `<button class="small-btn btn-add" onclick="addFriend(${x.id})">ï¼å¥½å</button>`
+          ? '<span class="already-friend">已是好友</span>'
+          : `<button class="small-btn btn-add" onclick="addFriend(${x.id})">＋好友</button>`
         }
-        <button class="small-btn btn-challenge" onclick="sendChallenge(${x.id},'${esc(x.username)}')">ææ</button>
+        <button class="small-btn btn-challenge" onclick="sendChallenge(${x.id},'${esc(x.username)}')">挑战</button>
       </div>`
-    ).join('')||'<p class="empty-hint">æªæ¾å°ç©å®¶</p>';
-  } catch { c.innerHTML='<p class="empty-hint">æç´¢å¤±è´¥</p>'; }
+    ).join('')||'<p class="empty-hint">未找到玩家</p >';
+  } catch { c.innerHTML='<p class="empty-hint">搜索失败</p >'; }
 }
 
 async function addFriend(fid) {
@@ -339,22 +339,22 @@ async function addFriend(fid) {
 async function sendChallenge(tuid,tname) {
   try {
     const r = await apiSendChallenge(state.user.id, tuid, state.selectedPattern);
-    state.waitingForChallenge=r.challengeId; state.waitingTargetName=tname||'å¯¹æ';
+    state.waitingForChallenge=r.challengeId; state.waitingTargetName=tname||'对手';
     updateMatchAreaForChallenge(); startChallengeSentPolling(); $('searchResults').innerHTML='';
   } catch(e) { alert(e.message); }
 }
 
 function updateMatchAreaForChallenge() {
   if (state.waitingForChallenge) {
-    $('matchBtn').disabled=true; $('matchBtn').textContent='â³ ç­å¾ååº';
+    $('matchBtn').disabled=true; $('matchBtn').textContent='⏳ 等待回应';
     $('matchBtn').className='match-btn matching';
-    $('matchInfo').innerHTML=`ç­å¾ ${esc(state.waitingTargetName)} æ¥åææ... <button class="small-btn btn-decline" onclick="cancelSentChallenge()">åæ¶</button>`;
+    $('matchInfo').innerHTML=`等待 ${esc(state.waitingTargetName)} 接受挑战... <button class="small-btn btn-decline" onclick="cancelSentChallenge()">取消</button>`;
   }
 }
 
 function clearMatchAreaForChallenge() {
   state.waitingForChallenge=null; state.waitingTargetName='';
-  $('matchBtn').disabled=false; $('matchBtn').textContent='ð® å¹éå¯¹æ';
+  $('matchBtn').disabled=false; $('matchBtn').textContent='🎮 匹配对战';
   $('matchBtn').className='match-btn'; $('matchInfo').innerHTML='';
 }
 
@@ -374,7 +374,7 @@ async function pollSentChallenges() {
   try {
     const [sl,ms]=await Promise.all([apiSentChallenges(state.user.id),apiMatchStatus(state.user.id)]);
     if(ms.status==='matched') { stopChallengeSentPolling();stopChallengePolling();clearMatchAreaForChallenge();startGame(ms.matchId,ms.opponent,ms.color,ms.myOppPattern); return; }
-    if(!sl.some(c=>c.id===state.waitingForChallenge)) { stopChallengeSentPolling();clearMatchAreaForChallenge();$('matchInfo').textContent='ææå·²è¢«æç»æå·²åæ¶'; }
+    if(!sl.some(c=>c.id===state.waitingForChallenge)) { stopChallengeSentPolling();clearMatchAreaForChallenge();$('matchInfo').textContent='挑战已被拒绝或已取消'; }
   } catch {}
 }
 
@@ -386,11 +386,11 @@ async function refreshFriends() {
       `<div class="friend-item">
         <span class="online-dot ${x.online?'on':'off'}"></span>
         <span class="fr-name">${esc(x.username)}</span>
-        <span class="fr-score">${x.score}å</span>
-        <button class="small-btn btn-invite" onclick="sendChallenge(${x.id},'${esc(x.username)}')">éè¯·</button>
-        <button class="small-btn btn-remove" onclick="removeFriend(${x.id})">â</button>
+        <span class="fr-score">${x.score}分</span>
+        <button class="small-btn btn-invite" onclick="sendChallenge(${x.id},'${esc(x.username)}')">邀请</button>
+        <button class="small-btn btn-remove" onclick="removeFriend(${x.id})">✕</button>
       </div>`
-    ).join(''):'<p class="empty-hint">ææ å¥½å</p>';
+    ).join(''):'<p class="empty-hint">暂无好友</p >';
   } catch {}
 }
 async function removeFriend(fid) { try{await apiRemoveFriend(state.user.id,fid);refreshFriends()}catch{} }
@@ -404,10 +404,10 @@ async function refreshChallenges() {
   try {
     const l=await apiGetChallenges(state.user.id);
     $('challengesList').innerHTML=l.length?l.map(c=>
-      `<div class="challenge-item"><span style="flex:1">${esc(c.fromUsername)} (${c.fromScore}å) åèµ·äºææ</span>
-        <button class="small-btn btn-accept" onclick="acceptChallenge(${c.id})">æ¥å</button>
-        <button class="small-btn btn-decline" onclick="declineChallenge(${c.id})">æç»</button></div>`
-    ).join(''):'<p class="empty-hint">ææ ææ</p>';
+      `<div class="challenge-item"><span style="flex:1">${esc(c.fromUsername)} (${c.fromScore}分) 发起了挑战</span>
+        <button class="small-btn btn-accept" onclick="acceptChallenge(${c.id})">接受</button>
+        <button class="small-btn btn-decline" onclick="declineChallenge(${c.id})">拒绝</button></div>`
+    ).join(''):'<p class="empty-hint">暂无挑战</p >';
   } catch {}
 }
 
@@ -430,8 +430,8 @@ function startGame(matchId, opponent, color, oppPattern) {
   showScreen('gameScreen');
   const myWr=calcWinRate(state.user); const oppWr=calcWinRate(opponent);
   $('gameMyName').textContent=state.user.username; $('gameMyAchievement').textContent=getAchievement(myWr);
-  $('gameMyScore').textContent=state.user.score+'å';
-  $('gameOpponentName').textContent=opponent.username; $('gameOpponentScore').textContent=opponent.score+'å';
+  $('gameMyScore').textContent=state.user.score+'分';
+  $('gameOpponentName').textContent=opponent.username; $('gameOpponentScore').textContent=opponent.score+'分';
   $('gameOpponentAchievement').textContent=getAchievement(oppWr);
   $('gameResultOverlay').style.display='none';
   lastEmojiTimestamp=Date.now();
@@ -460,27 +460,27 @@ function startAIGame() {
   showScreen('gameScreen');
   const wr=calcWinRate(state.user);
   $('gameMyName').textContent=state.user.username; $('gameMyAchievement').textContent=getAchievement(wr);
-  $('gameMyScore').textContent=state.user.score+'å';
+  $('gameMyScore').textContent=state.user.score+'分';
   $('gameOpponentName').textContent='AI'; $('gameOpponentAchievement').textContent='';
-  $('gameOpponentScore').textContent='0å';
+  $('gameOpponentScore').textContent='0分';
   $('gameResultOverlay').style.display='none';
   updateGameTurnUI(state.gameState); renderBoard();
 }
 
 function updateGameTurnUI(gs) {
   const el=$('gameTurnIndicator');
-  if(state.aiWaiting) { el.textContent='ð¤ AIæèä¸­...'; return; }
+  if(state.aiWaiting) { el.textContent='🤔 AI思考中...'; return; }
   if(!gs||gs.gameOver) {
     if(gs&&gs.gameOver) {
-      if(gs.winner===state.user.id||(state.isAIGame&&gs.winner===state.user.id)) el.textContent='ð ä½ èµ¢äºï¼';
-      else if(gs.winner===null) el.textContent='ð¤ å¹³å±';
-      else el.textContent='ð ä½ è¾äº';
-    } else el.textContent='ç­å¾ä¸­...';
+      if(gs.winner===state.user.id||(state.isAIGame&&gs.winner===state.user.id)) el.textContent='🎉 你赢了！';
+      else if(gs.winner===null) el.textContent='🤝 平局';
+      else el.textContent='😞 你输了';
+    } else el.textContent='等待中...';
     return;
   }
   const myTurn=state.isAIGame||(state.myColor==='black'&&gs.currentPlayer===1)||(state.myColor==='white'&&gs.currentPlayer===2);
   const sec=state.isAIGame?'--':Math.ceil((gs.turnRemaining||30000)/1000);
-  el.textContent=myTurn?`ð è½®å°ä½ äº (${sec}ç§)`:'â³ ç­å¾å¯¹æè½å­...';
+  el.textContent=myTurn?`👆 轮到你了 (${sec}秒)`:'⏳ 等待对手落子...';
 }
 
 function startGamePolling() { stopGamePolling(); gamePollTimer=setInterval(pollGameState,1000); pollGameState(); }
@@ -499,7 +499,7 @@ async function pollGameState() {
       else { state.gameOverShown=true; showGameResult(gs); }
     }
   } catch {
-    if(!state.gameOverShown) { state.gameOverShown=true; $('gameResultOverlay').style.display='flex'; $('resultTitle').textContent='è¿æ¥ä¸­æ­'; }
+    if(!state.gameOverShown) { state.gameOverShown=true; $('gameResultOverlay').style.display='flex'; $('resultTitle').textContent='连接中断'; }
     stopGamePolling();
   }
 }
@@ -507,11 +507,11 @@ async function pollGameState() {
 async function showGameResult(gs) {
   $('gameResultOverlay').style.display='flex';
   const resign = gs.winner && gs.winner!=='ai' && (!gs.winLine||!gs.winLine.length);
-  if(gs.winner===state.user.id) $('resultTitle').textContent=resign?'ð å¯¹æ¹å·²è®¤è¾ï¼èªå¨è·è':'ð ä½ èµ¢äºï¼';
-  else if(gs.winner===null) $('resultTitle').textContent='ð¤ å¹³å±';
-  else if(gs.winner==='ai'&&state.isAIGame) $('resultTitle').textContent='ð ä½ è¾äº';
-  else $('resultTitle').textContent='ð ä½ è¾äº';
-  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; const wr=calcWinRate(fresh); $('gameMyScore').textContent=fresh.score+'å'; $('gameMyAchievement').textContent=getAchievement(wr); } catch {}
+  if(gs.winner===state.user.id) $('resultTitle').textContent=resign?'🎉 对方已认输，自动获胜':'🎉 你赢了！';
+  else if(gs.winner===null) $('resultTitle').textContent='🤝 平局';
+  else if(gs.winner==='ai'&&state.isAIGame) $('resultTitle').textContent='😞 你输了';
+  else $('resultTitle').textContent='😞 你输了';
+  try { const fresh=await api('/api/user/'+state.user.id); state.user=fresh; const wr=calcWinRate(fresh); $('gameMyScore').textContent=fresh.score+'分'; $('gameMyAchievement').textContent=getAchievement(wr); } catch {}
 }
 
 $('backToLobbyBtn').addEventListener('click',()=>{
@@ -523,9 +523,9 @@ $('backToLobbyBtn').addEventListener('click',()=>{
 });
 
 $('resignBtn').addEventListener('click',async()=>{
-  if(state.isAIGame) { if(confirm('ç¡®å®è®¤è¾åï¼')) { delayedGameOver('ai', []); } return; }
+  if(state.isAIGame) { if(confirm('确定认输吗？')) { delayedGameOver('ai', []); } return; }
   if(!state.matchId||state.gameState?.gameOver) return;
-  if(!confirm('ç¡®å®è®¤è¾åï¼')) return;
+  if(!confirm('确定认输吗？')) return;
   try{await apiResign(state.matchId,state.user.id)}catch{}
 });
 
@@ -686,7 +686,7 @@ function drawPatternPiece(cx,x,y,r,pattern,isBlack) {
 async function refreshLeaderboardLobby() {
   try {
     const l=await apiLeaderboard();
-    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.winRate}%</span></li>`).join('')||'<p class="empty-hint">ææ æ°æ®</p>';
+    $('lobbyLeaderboard').innerHTML=l.map(p=>`<li><span class="lb-user">${esc(p.nickname||p.username)}</span><span class="lb-pts">${p.winRate}%</span></li>`).join('')||'<p class="empty-hint">暂无数据</p >';
   } catch {}
 }
 
@@ -696,4 +696,3 @@ $('lobbyLogoutBtn').addEventListener('click',()=>{
   state.user=null; state.isPlaying=false; state.isMatching=false; state.waitingForChallenge=null;
   showScreen('loginScreen'); $('loginUsername').value=''; $('loginPassword').value=''; $('loginError').textContent='';
 });
-
