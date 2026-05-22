@@ -7,6 +7,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use((req, res, next) => {
+  const _send = res.send.bind(res);
+  res.send = function(body) {
+    const ct = res.getHeader('Content-Type');
+    if (ct && typeof ct === 'string' && !ct.includes('charset') && (ct.includes('text/') || ct.includes('application/json') || ct.includes('application/javascript')))
+      res.setHeader('Content-Type', ct + '; charset=utf-8');
+    return _send(body);
+  };
+  next();
+});
 
 const DB_PATH = path.join(__dirname, 'game-data.json');
 function readDB() { try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8')); } catch { return { users: [], nextId: 1 }; } }
